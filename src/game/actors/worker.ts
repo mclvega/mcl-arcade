@@ -49,6 +49,7 @@ export class Worker {
     if (role === 'cashier') this.group.rotation.y = Math.PI / 2;
     const anchor = new THREE.Object3D();
     anchor.position.set(0, 0.45, -0.45);
+    anchor.scale.setScalar(1 / (this.body.userData.heightScale ?? 1));
     this.body.add(anchor);
     this.stack = new Stack(anchor, game.staffCapacity, columnLayout());
     this.bubble.sprite.position.y = 1.75;

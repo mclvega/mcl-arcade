@@ -23,6 +23,7 @@ export class Player {
     this.group.position.copy(start);
     const anchor = new THREE.Object3D();
     anchor.position.set(0, 0.45, -0.45);
+    anchor.scale.setScalar(1 / (this.body.userData.heightScale ?? 1));
     this.body.add(anchor);
     this.stack = new Stack(anchor, capacity, columnLayout());
     if (name) {

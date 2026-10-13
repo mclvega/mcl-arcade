@@ -68,7 +68,7 @@ Al abrir una tienda eliges la **dificultad**:
 - **☕ Descansos del personal:** los reponedores descansan tras varios viajes y el cajero se toma descansos, durante los que tienes que cubrir tú la caja.
 - **🐾 Mascotas:** los hábitats tienen una barra de comida que se vacía. Si se queda vacía, los animales dejan de criar (😿) y la tienda pierde reputación cada pocos segundos.
 
-**👕 Personaje:** desde el menú (botón *Personaje* o junto al saludo) eliges género, tono de piel, peinado y color de pelo, camiseta, parte de abajo (pantalón, pantalón corto o falda) y su color, gorro (gorra, sombrero, chef, gorro de lana, casco o corona) y accesorio (gafas, gafas de sol, bigote o pajarita). Hay vista previa en 3D que se puede girar y un botón 🎲 *Aleatorio*. La primera vez se abre después de preguntarte el nombre. Los clientes también tienen aspectos aleatorios, y los VIP llevan corona.
+**👕 Personaje:** desde el menú (botón *Personaje* o junto al saludo) eliges género, tipo de cuerpo, altura, tono de piel, ojos, vello facial (bigote, perilla, barba corta o larga), peinado y color de pelo, camiseta, parte de abajo (pantalón, pantalón corto o falda) y su color, gorro (gorra, sombrero, chef, gorro de lana, casco o corona) y accesorio (gafas, gafas de sol, pajarita, pendientes o bufanda). Hay vista previa en 3D que se puede girar y un botón 🎲 *Aleatorio*. La primera vez se abre después de preguntarte el nombre. Los clientes también tienen aspectos aleatorios, y los VIP llevan corona.
 
 **Nombres:** al abrir el juego por primera vez se pregunta tu nombre (aparece sobre tu personaje). La primera vez que entras en una tienda le pones nombre; sale en el cartel de la tienda y en el menú. Ambos se pueden cambiar desde el menú con ✏️.
 

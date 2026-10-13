@@ -35,6 +35,7 @@ export class Thief {
     this.body.add(mask);
     const anchor = new THREE.Object3D();
     anchor.position.set(0, 0.45, -0.45);
+    anchor.scale.setScalar(1 / (this.body.userData.heightScale ?? 1));
     this.body.add(anchor);
     this.stack = new Stack(anchor, 99, columnLayout());
 

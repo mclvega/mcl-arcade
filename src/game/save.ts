@@ -64,7 +64,14 @@ export function clearStoreProgress(id: string) {
 }
 
 /** Apariencia del personaje del jugador. */
-export const loadLook = (): Look => ({ ...DEFAULT_LOOK, ...(read<Partial<Look>>(`${PREFIX}:look`) ?? {}) });
+export function loadLook(): Look {
+  const saved = (read<Record<string, unknown>>(`${PREFIX}:look`) ?? {}) as Omit<Partial<Look>, 'accessory'> & { accessory?: string };
+  if (saved.accessory === 'mustache') {
+    saved.accessory = 'none';
+    saved.facialHair = 'mustache';
+  }
+  return { ...DEFAULT_LOOK, ...(saved as Partial<Look>) };
+}
 export const saveLook = (look: Look) => write(`${PREFIX}:look`, look);
 
 export const loadPlayerName = () => read<string>(`${PREFIX}:player`);

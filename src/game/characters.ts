@@ -16,11 +16,19 @@ export type Gender = 'boy' | 'girl';
 export type HairStyle = 'short' | 'long' | 'ponytail' | 'curly' | 'mohawk' | 'bun' | 'bald';
 export type Bottom = 'pants' | 'shorts' | 'skirt';
 export type HatStyle = 'none' | 'cap' | 'straw' | 'chef' | 'beanie' | 'helmet' | 'crown';
-export type Accessory = 'none' | 'glasses' | 'sunglasses' | 'mustache' | 'bowtie';
+export type Accessory = 'none' | 'glasses' | 'sunglasses' | 'bowtie' | 'earrings' | 'scarf';
+export type BodyType = 'slim' | 'normal' | 'strong' | 'chubby';
+export type Height = 'short' | 'medium' | 'tall';
+export type Eyes = 'normal' | 'big' | 'happy' | 'lashes';
+export type FacialHair = 'none' | 'mustache' | 'goatee' | 'stubble' | 'beard';
 
 export interface Look {
   gender: Gender;
+  body: BodyType;
+  height: Height;
   skin: number;
+  eyes: Eyes;
+  facialHair: FacialHair;
   hair: HairStyle;
   hairColor: number;
   shirt: number;
@@ -35,6 +43,30 @@ export const LOOK_OPTIONS = {
   gender: [
     { id: 'boy', label: '👦 Chico' },
     { id: 'girl', label: '👧 Chica' },
+  ],
+  body: [
+    { id: 'slim', label: 'Delgado' },
+    { id: 'normal', label: 'Normal' },
+    { id: 'strong', label: 'Fuerte' },
+    { id: 'chubby', label: 'Robusto' },
+  ],
+  height: [
+    { id: 'short', label: 'Bajo' },
+    { id: 'medium', label: 'Medio' },
+    { id: 'tall', label: 'Alto' },
+  ],
+  eyes: [
+    { id: 'normal', label: 'Normales' },
+    { id: 'big', label: 'Grandes' },
+    { id: 'happy', label: 'Felices' },
+    { id: 'lashes', label: 'Con pestañas' },
+  ],
+  facialHair: [
+    { id: 'none', label: 'Ninguno' },
+    { id: 'mustache', label: 'Bigote' },
+    { id: 'goatee', label: 'Perilla' },
+    { id: 'stubble', label: 'Barba corta' },
+    { id: 'beard', label: 'Barba larga' },
   ],
   skin: [0xffe0c4, 0xf5c9a0, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3a21],
   hair: [
@@ -68,14 +100,19 @@ export const LOOK_OPTIONS = {
     { id: 'none', label: 'Ninguno' },
     { id: 'glasses', label: 'Gafas' },
     { id: 'sunglasses', label: 'Gafas de sol' },
-    { id: 'mustache', label: 'Bigote' },
     { id: 'bowtie', label: 'Pajarita' },
+    { id: 'earrings', label: 'Pendientes' },
+    { id: 'scarf', label: 'Bufanda' },
   ],
 } as const;
 
 export const DEFAULT_LOOK: Look = {
   gender: 'boy',
+  body: 'normal',
+  height: 'medium',
   skin: 0xf5c9a0,
+  eyes: 'normal',
+  facialHair: 'none',
   hair: 'short',
   hairColor: 0x5d4037,
   shirt: 0x1e88e5,
@@ -92,7 +129,11 @@ export function randomLook(): Look {
   const gender = pick(['boy', 'girl'] as const);
   return {
     gender,
+    body: pick(['slim', 'normal', 'normal', 'strong', 'chubby'] as const),
+    height: pick(['short', 'medium', 'medium', 'tall'] as const),
     skin: pick(LOOK_OPTIONS.skin),
+    eyes: pick(gender === 'girl' ? (['normal', 'lashes', 'big', 'happy'] as const) : (['normal', 'normal', 'big', 'happy'] as const)),
+    facialHair: gender === 'boy' && Math.random() < 0.35 ? pick(['mustache', 'goatee', 'stubble', 'beard'] as const) : 'none',
     hair: pick(gender === 'girl' ? (['long', 'ponytail', 'bun', 'curly', 'short'] as const) : (['short', 'curly', 'mohawk', 'bald', 'short'] as const)),
     hairColor: pick(LOOK_OPTIONS.hairColor.slice(0, 6)),
     shirt: pick(LOOK_OPTIONS.shirt),
@@ -100,7 +141,7 @@ export function randomLook(): Look {
     bottomColor: pick(LOOK_OPTIONS.bottomColor),
     hat: Math.random() < 0.25 ? pick(['cap', 'straw', 'beanie'] as const) : 'none',
     hatColor: pick(LOOK_OPTIONS.hatColor),
-    accessory: Math.random() < 0.3 ? pick(['glasses', 'sunglasses', 'mustache', 'bowtie'] as const) : 'none',
+    accessory: Math.random() < 0.3 ? pick(['glasses', 'sunglasses', 'bowtie', 'scarf', ...(gender === 'girl' ? (['earrings'] as const) : [])] as const) : 'none',
   };
 }
 
@@ -114,6 +155,65 @@ export interface Character {
 const HEAD_Y = 1.28;
 const HEAD_R = 0.24;
 
+/** Radio del torso, anchura de hombros, profundidad y grosor de brazos según el tipo de cuerpo. */
+const BODY: Record<BodyType, { r: number; shoulders: number; depth: number; arm: number }> = {
+  slim: { r: 0.25, shoulders: 1, depth: 0.95, arm: 0.06 },
+  normal: { r: 0.3, shoulders: 1, depth: 1, arm: 0.07 },
+  strong: { r: 0.31, shoulders: 1.2, depth: 1, arm: 0.09 },
+  chubby: { r: 0.37, shoulders: 1.05, depth: 1.1, arm: 0.08 },
+};
+
+const HEIGHT: Record<Height, number> = { short: 0.88, medium: 1, tall: 1.1 };
+
+function addEyes(body: THREE.Group, look: Look) {
+  const y = HEAD_Y + 0.04;
+  for (const x of [-0.09, 0.09]) {
+    switch (look.eyes) {
+      case 'big':
+        body.add(m(new THREE.SphereGeometry(0.055, 10, 8), 0xffffff, x, y, 0.2));
+        body.add(m(new THREE.SphereGeometry(0.032, 8, 6), 0x222222, x, y, 0.245));
+        break;
+      case 'happy': {
+        const arc = m(new THREE.TorusGeometry(0.035, 0.011, 4, 8, Math.PI), 0x222222, x, y - 0.015, 0.225);
+        body.add(arc);
+        break;
+      }
+      case 'lashes':
+        body.add(m(new THREE.SphereGeometry(0.035, 8, 6), 0x222222, x, y, 0.21));
+        body.add(m(new THREE.BoxGeometry(0.07, 0.015, 0.02), 0x222222, x + (x < 0 ? -0.01 : 0.01), y + 0.045, 0.215));
+        break;
+      default:
+        body.add(m(new THREE.SphereGeometry(0.035, 8, 6), 0x222222, x, y, 0.21));
+    }
+  }
+}
+
+function addFacialHair(body: THREE.Group, look: Look) {
+  const c = look.hairColor;
+  // Mitad delantera de la parte baja de la cabeza (mandíbula).
+  const jaw = (r: number) => m(new THREE.SphereGeometry(r, 16, 8, 0, Math.PI, Math.PI * 0.6, Math.PI * 0.4), c, 0, HEAD_Y, 0);
+  switch (look.facialHair) {
+    case 'mustache':
+      body.add(m(new THREE.BoxGeometry(0.16, 0.04, 0.04), c, 0, HEAD_Y - 0.035, 0.225));
+      break;
+    case 'goatee':
+      body.add(m(new THREE.BoxGeometry(0.14, 0.035, 0.04), c, 0, HEAD_Y - 0.035, 0.225));
+      body.add(m(new THREE.BoxGeometry(0.08, 0.09, 0.05), c, 0, HEAD_Y - 0.17, 0.19));
+      break;
+    case 'stubble':
+      body.add(jaw(HEAD_R + 0.012));
+      body.add(m(new THREE.BoxGeometry(0.16, 0.04, 0.04), c, 0, HEAD_Y - 0.035, 0.225));
+      break;
+    case 'beard':
+      body.add(jaw(HEAD_R + 0.02));
+      body.add(m(new THREE.BoxGeometry(0.16, 0.04, 0.04), c, 0, HEAD_Y - 0.035, 0.23));
+      body.add(m(new THREE.BoxGeometry(0.26, 0.2, 0.12), c, 0, HEAD_Y - 0.27, 0.13));
+      break;
+    case 'none':
+      break;
+  }
+}
+
 function m(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh {
   const mesh = new THREE.Mesh(geo, mat(color));
   mesh.position.set(x, y, z);
@@ -122,14 +222,16 @@ function m(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE
 
 function addHair(body: THREE.Group, look: Look) {
   const c = look.hairColor;
+  // Casquete: por delante solo cubre la parte alta de la cabeza (deja la frente y los ojos a la vista)
+  // y por detrás baja hasta la nuca.
   const cap = () => {
-    const h = m(new THREE.SphereGeometry(HEAD_R + 0.025, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), c, 0, HEAD_Y + 0.01, -0.01);
-    body.add(h);
+    body.add(m(new THREE.SphereGeometry(HEAD_R + 0.02, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.32), c, 0, HEAD_Y, 0));
+    body.add(m(new THREE.SphereGeometry(HEAD_R + 0.02, 16, 10, Math.PI, Math.PI, 0, Math.PI * 0.62), c, 0, HEAD_Y, 0));
   };
   switch (look.hair) {
     case 'short':
       cap();
-      body.add(m(new THREE.BoxGeometry(0.3, 0.07, 0.08), c, 0, HEAD_Y + 0.17, 0.17));
+      body.add(m(new THREE.BoxGeometry(0.26, 0.05, 0.06), c, 0, HEAD_Y + 0.19, 0.15));
       break;
     case 'long':
       cap();
@@ -145,7 +247,7 @@ function addHair(body: THREE.Group, look: Look) {
       body.add(m(new THREE.SphereGeometry(0.11, 12, 8), c, 0, HEAD_Y + 0.27, -0.06));
       break;
     case 'curly':
-      body.add(m(new THREE.IcosahedronGeometry(0.31, 1), c, 0, HEAD_Y + 0.08, -0.05));
+      body.add(m(new THREE.IcosahedronGeometry(0.28, 1), c, 0, HEAD_Y + 0.13, -0.11));
       break;
     case 'mohawk':
       body.add(m(new THREE.BoxGeometry(0.07, 0.18, 0.4), c, 0, HEAD_Y + 0.25, -0.02));
@@ -173,12 +275,12 @@ function addHat(body: THREE.Group, look: Look) {
       body.add(m(new THREE.SphereGeometry(0.26, 14, 10), 0xffffff, 0, top + 0.26, 0));
       break;
     case 'beanie':
-      body.add(m(new THREE.SphereGeometry(HEAD_R + 0.04, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), c, 0, HEAD_Y + 0.03, 0));
-      body.add(m(new THREE.SphereGeometry(0.06, 8, 6), 0xffffff, 0, HEAD_Y + 0.31, 0));
+      body.add(m(new THREE.SphereGeometry(HEAD_R + 0.04, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.42), c, 0, HEAD_Y + 0.06, 0));
+      body.add(m(new THREE.SphereGeometry(0.06, 8, 6), 0xffffff, 0, HEAD_Y + 0.34, 0));
       break;
     case 'helmet':
-      body.add(m(new THREE.SphereGeometry(HEAD_R + 0.05, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), 0xfdd835, 0, HEAD_Y + 0.03, 0));
-      body.add(m(new THREE.BoxGeometry(0.34, 0.03, 0.14), 0xfdd835, 0, HEAD_Y + 0.04, 0.24));
+      body.add(m(new THREE.SphereGeometry(HEAD_R + 0.05, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.42), 0xfdd835, 0, HEAD_Y + 0.06, 0));
+      body.add(m(new THREE.BoxGeometry(0.34, 0.03, 0.12), 0xfdd835, 0, HEAD_Y + 0.13, 0.25));
       break;
     case 'crown': {
       const gold = 0xffc107;
@@ -207,9 +309,15 @@ function addAccessory(body: THREE.Group, look: Look) {
     case 'sunglasses':
       body.add(m(new THREE.BoxGeometry(0.34, 0.08, 0.03), 0x111111, 0, eyeY, 0.225));
       break;
-    case 'mustache':
-      body.add(m(new THREE.BoxGeometry(0.16, 0.04, 0.04), look.hairColor, 0, HEAD_Y - 0.06, 0.225));
+    case 'earrings':
+      for (const x of [-HEAD_R, HEAD_R]) body.add(m(new THREE.SphereGeometry(0.03, 8, 6), 0xffc107, x, HEAD_Y - 0.06, 0.02));
       break;
+    case 'scarf': {
+      const scarf = m(new THREE.TorusGeometry(0.17, 0.06, 8, 16), 0xc62828, 0, 1.04, 0);
+      scarf.rotation.x = Math.PI / 2;
+      body.add(scarf, m(new THREE.BoxGeometry(0.1, 0.24, 0.05), 0xc62828, 0.1, 0.9, 0.2));
+      break;
+    }
     case 'bowtie':
       for (const x of [-0.06, 0.06]) {
         const cone = m(new THREE.ConeGeometry(0.05, 0.09, 4), 0xc62828, x, 1.0, 0.27);
@@ -228,16 +336,23 @@ export function createAvatar(look: Look): Character {
   const body = new THREE.Group();
   group.add(body);
   const girl = look.gender === 'girl';
-  const torsoR = girl ? 0.27 : 0.31;
+  const shape = BODY[look.body] ?? BODY.normal;
+  const torsoR = shape.r - (girl ? 0.03 : 0);
 
   // Torso (camiseta) y parte de abajo
-  body.add(m(new THREE.CapsuleGeometry(torsoR, 0.42, 4, 12), look.shirt, 0, 0.58, 0));
-  if (look.bottom === 'skirt') {
-    body.add(m(new THREE.CylinderGeometry(torsoR + 0.01, torsoR + 0.15, 0.34, 14), look.bottomColor, 0, 0.3, 0));
-  } else {
-    const h = look.bottom === 'shorts' ? 0.24 : 0.38;
-    body.add(m(new THREE.CylinderGeometry(torsoR + 0.012, torsoR + 0.02, h, 14), look.bottomColor, 0, 0.42 - h / 2, 0));
-  }
+  const torso = m(new THREE.CapsuleGeometry(torsoR, 0.42, 4, 12), look.shirt, 0, 0.58, 0);
+  torso.scale.set(shape.shoulders, 1, shape.depth);
+  body.add(torso);
+  // La parte de abajo se ensancha igual que el torso para que la camiseta no sobresalga.
+  const lower =
+    look.bottom === 'skirt'
+      ? m(new THREE.CylinderGeometry(torsoR + 0.015, torsoR + 0.15, 0.34, 14), look.bottomColor, 0, 0.3, 0)
+      : (() => {
+          const h = look.bottom === 'shorts' ? 0.24 : 0.38;
+          return m(new THREE.CylinderGeometry(torsoR + 0.02, torsoR + 0.025, h, 14), look.bottomColor, 0, 0.42 - h / 2, 0);
+        })();
+  lower.scale.set(shape.shoulders, 1, shape.depth);
+  body.add(lower);
   if (look.bottom !== 'pants') for (const x of [-0.12, 0.12]) body.add(m(new THREE.CylinderGeometry(0.07, 0.07, 0.16, 8), look.skin, x, 0.1, 0.02));
   for (const x of [-0.12, 0.12]) body.add(m(new THREE.BoxGeometry(0.13, 0.07, 0.2), 0x3e2723, x, 0.035, 0.05));
 
@@ -245,9 +360,9 @@ export function createAvatar(look: Look): Character {
   const arms: THREE.Group[] = [];
   for (const side of [-1, 1]) {
     const arm = new THREE.Group();
-    arm.position.set(side * (torsoR + 0.06), 0.85, 0);
-    arm.add(m(new THREE.CapsuleGeometry(0.07, 0.24, 4, 8), look.shirt, 0, -0.18, 0));
-    arm.add(m(new THREE.SphereGeometry(0.07, 8, 6), look.skin, 0, -0.38, 0));
+    arm.position.set(side * (torsoR * shape.shoulders + shape.arm - 0.01), 0.85, 0);
+    arm.add(m(new THREE.CapsuleGeometry(shape.arm, 0.24, 4, 8), look.shirt, 0, -0.18, 0));
+    arm.add(m(new THREE.SphereGeometry(shape.arm, 8, 6), look.skin, 0, -0.38, 0));
     arm.rotation.z = side * 0.12;
     arms.push(arm);
     body.add(arm);
@@ -256,9 +371,13 @@ export function createAvatar(look: Look): Character {
 
   // Cabeza y cara
   body.add(m(new THREE.SphereGeometry(HEAD_R, 16, 12), look.skin, 0, HEAD_Y, 0));
-  for (const x of [-0.09, 0.09]) body.add(m(new THREE.SphereGeometry(0.035, 8, 6), 0x222222, x, HEAD_Y + 0.04, 0.21));
+  addEyes(body, look);
+  const smile = m(new THREE.TorusGeometry(0.045, 0.012, 6, 10, Math.PI), 0x8d3b3b, 0, HEAD_Y - 0.07, 0.225);
+  smile.rotation.z = Math.PI;
+  body.add(smile);
   if (girl) for (const x of [-0.13, 0.13]) body.add(m(new THREE.SphereGeometry(0.035, 8, 6), 0xf8a5a5, x, HEAD_Y - 0.04, 0.19));
 
+  addFacialHair(body, look);
   addHair(body, look);
   addHat(body, look);
   addAccessory(body, look);
@@ -266,6 +385,10 @@ export function createAvatar(look: Look): Character {
   body.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) o.castShadow = true;
   });
+  // Altura: escala todo el cuerpo (quien añada una pila a la espalda puede compensarla con userData.heightScale).
+  const hs = HEIGHT[look.height] ?? 1;
+  body.scale.setScalar(hs);
+  body.userData.heightScale = hs;
   return { group, body };
 }
 

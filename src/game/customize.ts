@@ -3,14 +3,18 @@ import { createAvatar, LOOK_OPTIONS, randomLook, type Look } from './characters'
 import { loadLook, saveLook } from './save';
 import { openModal } from './ui';
 
-type ChoiceKey = 'gender' | 'hair' | 'bottom' | 'hat' | 'accessory';
+type ChoiceKey = 'gender' | 'body' | 'height' | 'eyes' | 'facialHair' | 'hair' | 'bottom' | 'hat' | 'accessory';
 type ColorKey = 'skin' | 'hairColor' | 'shirt' | 'bottomColor' | 'hatColor';
 
 const SECTIONS: ({ kind: 'choice'; key: ChoiceKey; title: string } | { kind: 'color'; key: ColorKey; title: string })[] = [
   { kind: 'choice', key: 'gender', title: 'Género' },
+  { kind: 'choice', key: 'body', title: 'Tipo de cuerpo' },
+  { kind: 'choice', key: 'height', title: 'Altura' },
   { kind: 'color', key: 'skin', title: 'Tono de piel' },
+  { kind: 'choice', key: 'eyes', title: 'Ojos' },
   { kind: 'choice', key: 'hair', title: 'Peinado' },
-  { kind: 'color', key: 'hairColor', title: 'Color de pelo' },
+  { kind: 'color', key: 'hairColor', title: 'Color de pelo y barba' },
+  { kind: 'choice', key: 'facialHair', title: 'Vello facial' },
   { kind: 'color', key: 'shirt', title: 'Camiseta' },
   { kind: 'choice', key: 'bottom', title: 'Parte de abajo' },
   { kind: 'color', key: 'bottomColor', title: 'Color de abajo' },
