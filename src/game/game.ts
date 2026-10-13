@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import { Customer, type Want } from './actors/customer';
 import { Player } from './actors/player';
+import { Thief } from './actors/thief';
 import { Worker, type StockTask } from './actors/worker';
 import { initAudio, sfx } from './audio';
-import { LAYOUT, QUALITY, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES } from './config';
+import { setMusicMood } from './music';
+import { CARE, DIFFICULTIES, SPECIAL, THIEF, LAYOUT, QUALITY, REPUTATION, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES, type DifficultyDef } from './config';
 import { Hud } from './hud';
 import { Input } from './input';
-import { itemName, type ItemType } from './items';
-import { displayName, loadPlayerName, loadStore, saveStore, unlockStore } from './save';
+import { itemEmoji, itemName, PRODUCTS, type ItemType } from './items';
+import { clearStoreProgress, displayName, loadDifficulty, loadPlayerName, loadStore, saveStore, unlockStore, type StoreStats } from './save';
 import { scene } from './scene';
+import { consumeItem } from './stack';
 import { onSettingsChange, settings } from './settings';
 import { BuyZone } from './stations/buyzone';
 import { Plot } from './stations/plot';
@@ -16,11 +19,13 @@ import { Processor } from './stations/processor';
 import { Register } from './stations/register';
 import { Shelf } from './stations/shelf';
 import { TrashBin } from './stations/trash';
+import { SpecialOrder, type OrderLine } from './stations/order';
 import { buildUnlocks, MACHINES, startMoney, STORE_MAP, type StoreDef, type UnlockDef, type UnlockKind } from './stores';
-import { clearTweens, popIn, updateTweens } from './tween';
+import { addTween, clearTweens, popIn, updateTweens } from './tween';
 import type { Sink, Source, Zone } from './types';
+import { floatingText } from './labels';
 import { isModalOpen, openModal } from './ui';
-import { damp, distXZ, randInt, shuffle, type Box } from './util';
+import { damp, distXZ, rand, randInt, shuffle, type Box } from './util';
 import { buildWorld } from './world';
 
 const CAM_OFFSET = new THREE.Vector3(12, 16, 12);
@@ -29,6 +34,8 @@ const CAM_OFFSET = new THREE.Vector3(12, 16, 12);
 export interface Nav {
   menu(): void;
   store(id: string): void;
+  /** Tras cerrar la tienda: empezar de cero (se puede cambiar la dificultad). */
+  restart(id: string): void;
 }
 
 export class Game {
@@ -47,10 +54,22 @@ export class Game {
   readonly unlocks: UnlockDef[];
   readonly player: Player;
   readonly register: Register;
+  readonly order: SpecialOrder;
   readonly input: Input;
   readonly hud: Hud;
   readonly name: string;
   money: number;
+  readonly difficulty: DifficultyDef;
+  /** Reputación 0–100. Si baja de 0 (y la dificultad lo permite) la tienda cierra. */
+  rep: number;
+  stats: StoreStats = { served: 0, lost: 0, earned: 0, tips: 0, playTime: 0 };
+  /** La tienda ha cerrado: el juego se congela. */
+  private over = false;
+  private warnedHungry = false;
+  private warnedBreak = false;
+  private orderTimer = SPECIAL.firstDelay;
+  private thief: Thief | null = null;
+  private thiefCooldown = 30;
   cashierHired = false;
 
   private unlockMap: Map<string, UnlockDef>;
@@ -81,6 +100,8 @@ export class Game {
     private nav: Nav,
   ) {
     this.name = displayName(store);
+    this.difficulty = DIFFICULTIES[loadDifficulty(store.id)];
+    this.rep = this.difficulty.startRep;
     this.unlocks = buildUnlocks(store);
     this.unlockMap = new Map(this.unlocks.map((u) => [u.id, u]));
     this.money = startMoney(store, this.unlocks);
@@ -94,6 +115,7 @@ export class Game {
     scene.add(this.player.group);
     this.register = new Register(this, LAYOUT.register);
     new TrashBin(this, LAYOUT.trash);
+    this.order = new SpecialOrder(this, LAYOUT.orderTruck);
     for (const def of this.unlocks) this.buyZones.set(def.id, new BuyZone(this, def));
     this.hud = new Hud(this);
 
@@ -176,9 +198,30 @@ export class Game {
   get staffCapacity() {
     return STATS.staffCapacity(this.level('staff'));
   }
+  get checkoutInterval() {
+    return STATS.checkoutInterval(this.level('checkout'));
+  }
+  get patienceMult() {
+    return STATS.patienceMult(this.level('decor'));
+  }
+  /** Multiplica la duración de los descansos del personal. */
+  get restMultiplier() {
+    return STATS.restMult(this.level('rest'));
+  }
+  /** Hay un cajero contratado y no está en su descanso. */
+  get cashierOnDuty() {
+    return this.workers.some((w) => w.role === 'cashier' && w.onDuty);
+  }
 
-  hasBuilt(kind: UnlockKind) {
-    return this.unlocks.some((u) => u.kind === kind && this.unlocked.has(u.id));
+  /** Aviso la primera vez que el cajero se va a descansar. */
+  onCashierBreak() {
+    if (this.warnedBreak) return;
+    this.warnedBreak = true;
+    this.hud.toast('☕ El cajero se ha tomado un descanso: ¡cubre tú la caja!', 4000);
+  }
+
+  hasBuilt(kinds: UnlockKind[]) {
+    return this.unlocks.some((u) => kinds.includes(u.kind) && this.unlocked.has(u.id));
   }
 
   upgradePrice(id: string) {
@@ -202,6 +245,13 @@ export class Game {
   private applyStats() {
     this.player.stack.capacity = STATS.playerCapacity(this.level('capacity'));
     for (const w of this.workers) w.stack.capacity = this.staffCapacity;
+    const shelfCap = STATS.shelfCapacity(this.level('shelves'));
+    for (const s of this.shelves) s.stack.capacity = shelfCap;
+    const machineCap = STATS.machineCapacity(this.level('storage'));
+    for (const p of this.processors) {
+      p.output.capacity = machineCap;
+      if (p.input) p.input.capacity = machineCap;
+    }
   }
 
   // ───────── Dinero ─────────
@@ -257,6 +307,8 @@ export class Game {
         const p = new Processor(this, MACHINES[def.ref!], def.x, def.z);
         this.processors.push(p);
         obj = p.group;
+        if (p.def.care && !instant && !this.processors.some((x) => x !== p && x.def.care))
+          this.hud.toast('🐾 Los animales necesitan comida: mantén lleno su comedero o perderás reputación', 5000);
         break;
       }
       case 'cashier': {
@@ -277,6 +329,7 @@ export class Game {
         break;
     }
 
+    this.applyStats();
     if (instant) return;
     if (obj) popIn(obj);
     sfx.unlock();
@@ -351,7 +404,7 @@ export class Game {
       let source: Source | undefined;
       for (const s of this.sourcesFor(sink.type)) if (s.available() > 0 && (!source || s.available() > source.available())) source = s;
       if (!source) continue;
-      const score = sink.stack.count / sink.stack.capacity + (sink.isShelf ? 0 : 0.2);
+      const score = sink.stack.count / sink.stack.capacity + (sink.isShelf ? 0 : 0.2) - (sink.priority?.() ?? 0);
       if (score < bestScore) {
         bestScore = score;
         best = { sink, source };
@@ -403,7 +456,9 @@ export class Game {
   }
 
   private update(dt: number) {
+    if (this.over) return;
     this.elapsed += dt;
+    this.stats.playTime += dt;
     const paused = isModalOpen();
     this.player.update(dt, paused ? { x: 0, y: 0 } : this.input.vector(), this.playerSpeed, this.obstacles);
     this.updateZones(dt, paused);
@@ -420,6 +475,8 @@ export class Game {
     }
     for (const w of this.workers) w.update(dt);
     this.updateSpawner(dt);
+    this.updateOrders(dt);
+    this.updateThief(dt);
     updateTweens(dt);
 
     this.hintTimer -= dt;
@@ -482,18 +539,239 @@ export class Game {
     }
   }
 
+  /** Más reputación = más clientes; también lo ajusta la dificultad. */
   private updateSpawner(dt: number) {
-    if (this.shelves.length === 0) return;
+    // Solo se piden productos que ya se pueden conseguir (hay estantería y producción).
+    const types = shuffle([...new Set(this.shelves.filter((s) => s.stack.count > 0 || this.sourcesFor(s.type).length > 0).map((s) => s.type))]);
+    if (types.length === 0) return;
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;
     const n = this.shelves.length;
-    this.spawnTimer = Math.max(1.6, 6.5 - n * 0.45) * (0.8 + Math.random() * 0.4);
+    const repFactor = THREE.MathUtils.clamp(1.4 - (0.8 * this.rep) / REPUTATION.max, 0.6, 1.4);
+    this.spawnTimer =
+      Math.max(1.6, 6.5 - n * 0.45) * this.difficulty.spawnMult * STATS.spawnMult(this.level('marketing')) * repFactor * (0.8 + Math.random() * 0.4);
     if (this.customers.length >= Math.min(16, 3 + n * 1.2)) return;
 
-    const types = shuffle([...new Set(this.shelves.map((s) => s.type))]);
-    const nTypes = Math.min(types.length, Math.random() < 0.2 ? 3 : randInt(1, 2));
-    const wants: Want[] = types.slice(0, nTypes).map((type) => ({ type, qty: randInt(1, nTypes > 1 ? 2 : 3), got: 0 }));
-    this.customers.push(new Customer(this, wants));
+    const vip = n >= 4 && Math.random() < REPUTATION.vipChance;
+    const nTypes = Math.min(types.length, vip ? 3 : Math.random() < 0.2 ? 3 : randInt(1, 2));
+    const wants: Want[] = types.slice(0, nTypes).map((type) => ({ type, qty: vip ? randInt(2, 3) : randInt(1, nTypes > 1 ? 2 : 3), got: 0 }));
+    const items = wants.reduce((s, w) => s + w.qty, 0);
+    const d = this.difficulty;
+    const patience = (d.patienceBase + d.patiencePerItem * items) * this.patienceMult * (vip ? 0.75 : 1);
+    this.customers.push(new Customer(this, wants, patience, vip));
+    if (vip) this.hud.toast('👑 ¡Ha llegado un cliente VIP! Atiéndelo rápido', 3000);
+  }
+
+  // ───────── Ladrón ─────────
+
+  private updateThief(dt: number) {
+    if (this.thief) {
+      this.thief.update(dt);
+      return;
+    }
+    this.thiefCooldown -= dt;
+    const r = this.register;
+    if (this.thiefCooldown > 0 || r.cashPile.count < THIEF.minBills || r.cashIdle < this.difficulty.thiefIdle) return;
+    this.thief = new Thief(this, this.difficulty.thiefSpeed);
+    sfx.alarm();
+    this.hud.toast('🚨 ¡Un ladrón va a por el dinero de la caja! Corre a atraparlo', 4000);
+  }
+
+  /** El jugador lo toca: recupera lo robado y gana reputación. */
+  onThiefCaught(t: Thief) {
+    const loot = t.stolen;
+    for (let it = t.stack.pop(); it; it = t.stack.pop()) {
+      this.addMoney(it.value);
+      consumeItem(it, this.player.pos.clone().setY(1.0), undefined, 0.25);
+    }
+    t.vanish();
+    this.thief = null;
+    this.thiefCooldown = THIEF.cooldown;
+    sfx.caught();
+    if (loot > 0) this.float(`+$${loot}`, '#ffd54f', t.group.position, 3.0);
+    this.changeRep(THIEF.caughtRep, t.group.position);
+    this.hud.toast(loot > 0 ? `👮 ¡Ladrón atrapado! Recuperas $${loot}` : '👮 ¡Ladrón atrapado!', 3000);
+  }
+
+  onThiefEscaped(t: Thief) {
+    const loot = t.stolen;
+    t.dispose();
+    this.thief = null;
+    this.thiefCooldown = THIEF.cooldown;
+    if (loot <= 0) return;
+    this.changeRep(THIEF.escapedRep * this.difficulty.penaltyMult);
+    this.hud.toast(`💸 El ladrón escapó con $${loot}. Recoge el dinero de la caja más a menudo`, 4000);
+  }
+
+  // ───────── Pedidos especiales ─────────
+
+  private updateOrders(dt: number) {
+    const o = this.order;
+    if (o.active) {
+      o.update(dt);
+      this.hud.setOrder(o);
+      return;
+    }
+    this.orderTimer -= dt;
+    if (this.orderTimer > 0) return;
+    const types = shuffle([...new Set(this.shelves.filter((s) => this.sourcesFor(s.type).length > 0).map((s) => s.type))]);
+    if (types.length < SPECIAL.minProducts) {
+      this.orderTimer = 15;
+      return;
+    }
+    const lines: OrderLine[] = types.slice(0, randInt(1, Math.min(3, types.length))).map((type) => ({ type, qty: randInt(3, 6), got: 0 }));
+    const items = lines.reduce((s, l) => s + l.qty, 0);
+    const value = lines.reduce((s, l) => s + (PRODUCTS[l.type]?.price ?? 0) * l.qty, 0) * this.store.saleMult;
+    const time = (SPECIAL.baseTime + SPECIAL.perItem * items) * (this.difficulty.patienceBase / 38);
+    o.start(lines, time, Math.round(value * SPECIAL.rewardMult));
+    this.hud.setOrder(o);
+    sfx.upgrade();
+    this.hud.toast(`📦 ¡Pedido especial! ${lines.map((l) => `${l.qty} ${itemEmoji(l.type)}`).join(' + ')} · recompensa $${o.reward}`, 4000);
+  }
+
+  private endOrder() {
+    this.order.close();
+    this.hud.setOrder(null);
+    this.orderTimer = rand(SPECIAL.intervalMin, SPECIAL.intervalMax);
+  }
+
+  onOrderDelivered() {
+    const o = this.order;
+    this.addMoney(o.reward);
+    this.stats.earned += o.reward;
+    this.float(`+$${o.reward}`, '#ffd54f', LAYOUT.orderTruck, 3.2);
+    this.changeRep(SPECIAL.rep, LAYOUT.orderTruck);
+    sfx.unlock();
+    this.hud.toast(`🎉 ¡Pedido entregado! +$${o.reward}`, 3000);
+    this.endOrder();
+  }
+
+  onOrderExpired() {
+    this.hud.toast('⌛ El pedido especial ha caducado', 3000);
+    this.changeRep(SPECIAL.failRep * this.difficulty.penaltyMult, LAYOUT.orderTruck);
+    this.endOrder();
+  }
+
+  /** Rechazar no penaliza, pero se pierde la recompensa. */
+  rejectOrder() {
+    if (!this.order.active) return;
+    this.endOrder();
+  }
+
+  // ───────── Reputación ─────────
+
+  /** El cliente terminó de pagar: reputación según lo rápido que fue y propina. */
+  onCustomerPaid(c: Customer) {
+    const R = REPUTATION;
+    const vipM = c.vip ? R.vipMult : 1;
+    let delta: number;
+    let face: string;
+    let tip = 0;
+    if (c.partial) {
+      delta = R.partial * this.difficulty.penaltyMult * vipM;
+      face = '😕';
+    } else if (c.mood >= R.greatRatio) {
+      delta = R.great * vipM;
+      tip = Math.max(1, Math.round(c.spent * R.tipRate * this.difficulty.tipMult * vipM));
+      face = '😄';
+    } else {
+      delta = R.ok * vipM;
+      face = '🙂';
+    }
+    this.stats.served++;
+    this.stats.earned += c.spent;
+    if (tip > 0) {
+      this.stats.tips += tip;
+      this.register.addCash(tip);
+      this.float(`+$${tip}`, '#ffd54f', c.group.position, 3.0);
+    }
+    c.leave(face);
+    this.changeRep(delta, c.group.position);
+  }
+
+  /** Un hábitat lleva un rato sin comida. */
+  onPetsHungry(p: Processor) {
+    if (!this.warnedHungry) {
+      this.warnedHungry = true;
+      this.hud.toast(`😿 ¡Los animales del ${p.def.name} tienen hambre! Llena su comedero`, 4000);
+    }
+    this.changeRep(CARE.penalty * this.difficulty.penaltyMult, p.group.position);
+  }
+
+  /** El cliente se fue sin comprar. */
+  onCustomerLost(c: Customer) {
+    const vipM = c.vip ? REPUTATION.vipMult : 1;
+    this.stats.lost++;
+    c.leave('😡');
+    sfx.angry();
+    this.changeRep(REPUTATION.angry * this.difficulty.penaltyMult * vipM, c.group.position);
+  }
+
+  changeRep(raw: number, at?: THREE.Vector3) {
+    if (this.over) return;
+    const delta = raw > 0 ? Math.max(1, Math.round(raw)) : Math.min(-1, Math.round(raw));
+    const prev = this.rep;
+    this.rep = Math.min(REPUTATION.max, this.rep + delta);
+    if (!this.difficulty.canLose) this.rep = Math.max(0, this.rep);
+    if (at) this.float(`${delta > 0 ? '+' : ''}${delta} ⭐`, delta > 0 ? '#b9f6ca' : '#ff8a80', at, 2.5);
+    this.hud.setRep(this.rep, this.difficulty);
+    setMusicMood(this.rep / REPUTATION.max);
+    if (this.rep < REPUTATION.warning && prev >= REPUTATION.warning) {
+      this.hud.toast(
+        this.difficulty.canLose ? '⚠️ ¡Reputación muy baja! Si baja de 0, la tienda cerrará' : '⚠️ Tus clientes están descontentos',
+        4000,
+      );
+    }
+    if (this.rep < 0 && this.difficulty.canLose) this.gameOver();
+  }
+
+  private float(text: string, color: string, at: THREE.Vector3, y: number) {
+    const s = floatingText(text, color);
+    s.position.set(at.x, y, at.z);
+    scene.add(s);
+    const mat = s.material;
+    addTween(
+      1.3,
+      (k) => {
+        s.position.y = y + k * 1.2;
+        mat.opacity = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
+      },
+      () => {
+        scene.remove(s);
+        mat.map?.dispose();
+        mat.dispose();
+      },
+    );
+  }
+
+  /** Reputación negativa: la tienda cierra y se pierde su progreso. */
+  private gameOver() {
+    this.over = true;
+    clearStoreProgress(this.store.id);
+    this.hud.setAction(null);
+    const s = this.stats;
+    const mins = Math.floor(s.playTime / 60);
+    const body = `
+      <p class="big-emoji">🔒</p>
+      <p class="center">Los clientes dejaron de confiar en <b>${this.name}</b> y la tienda ha cerrado.<br>Has perdido su progreso.</p>
+      <div class="stats">
+        <div><b>${s.served}</b><small>clientes atendidos</small></div>
+        <div><b>${s.lost}</b><small>clientes perdidos</small></div>
+        <div><b>$${Math.floor(s.earned)}</b><small>ventas</small></div>
+        <div><b>${mins} min</b><small>abierta</small></div>
+      </div>
+      <p class="center muted">Consejo: contrata pronto un cajero y no dejes que se acumule la cola.</p>`;
+    let chosen = false;
+    openModal(
+      'Tienda cerrada',
+      body,
+      [
+        { label: '🏠 Menú', onClick: () => ((chosen = true), this.nav.menu()) },
+        { label: '🔄 Volver a empezar', primary: true, onClick: () => ((chosen = true), this.nav.restart(this.store.id)) },
+      ],
+      // Cerrar con ✕ o fuera de la ventana: al menú.
+      () => setTimeout(() => !chosen && this.nav.menu(), 0),
+    );
   }
 
   private updateHint() {
@@ -511,9 +789,19 @@ export class Game {
     const front = this.register.queue[0];
     const verb = settings.mode === 'manual' ? 'Pulsa el botón sobre la zona' : 'Párate sobre la zona';
 
-    if (this.unlocked.size < 2 && affordable.length) {
+    if (this.thief && this.thief.state !== 'done') {
+      target = this.thief.group.position;
+      text = '🚨 ¡Atrapa al ladrón! Choca con él';
+    } else if (this.unlocked.size < 2 && affordable.length) {
       target = affordable[0].pos;
       text = `${verb} para comprar: ${affordable[0].def.label}`;
+    } else if (this.processors.some((p) => p.hungry || (p.def.care && p.hunger < 0.3 && p.input?.count === 0))) {
+      const p = this.processors.find((x) => x.hungry || (x.def.care && x.hunger < 0.3 && x.input?.count === 0))!;
+      target = p.sink!.access;
+      text = `😿 Los animales del ${p.def.name} tienen hambre: lleva ${itemName(p.inputType!)}`;
+    } else if (this.order.active && this.order.needs.some((t) => p.stack.has(t))) {
+      target = this.order.pos;
+      text = '📦 Entrega el pedido especial en el camión';
     } else if (front?.readyToPay() && !this.register.staffed) {
       target = this.register.cashierSpot;
       text = '¡Un cliente espera! Ve a la caja 🧾';
@@ -629,9 +917,10 @@ export class Game {
   // ───────── Guardado ─────────
 
   save() {
+    if (this.over) return;
     const paid: Record<string, number> = {};
     for (const [id, z] of this.buyZones) if (!z.done && z.paid > 0) paid[id] = z.paid;
-    saveStore(this.store.id, { money: Math.floor(this.money), unlocked: [...this.unlocked], paid, upgrades: this.upgrades });
+    saveStore(this.store.id, { money: Math.floor(this.money), unlocked: [...this.unlocked], paid, upgrades: this.upgrades, rep: this.rep, stats: this.stats });
   }
 
   private loadGame() {
@@ -639,6 +928,8 @@ export class Game {
     if (data) {
       this.money = data.money;
       this.upgrades = { ...data.upgrades };
+      if (typeof data.rep === 'number') this.rep = data.rep;
+      if (data.stats) this.stats = { ...this.stats, ...data.stats };
       for (const def of this.unlocks) if (data.unlocked.includes(def.id)) this.unlock(def.id, true);
       for (const [id, v] of Object.entries(data.paid ?? {})) {
         const z = this.buyZones.get(id);
@@ -650,5 +941,7 @@ export class Game {
     }
     this.applyStats();
     this.refreshZones(false);
+    this.hud.setRep(this.rep, this.difficulty);
+    setMusicMood(this.rep / REPUTATION.max);
   }
 }

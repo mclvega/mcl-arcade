@@ -23,6 +23,8 @@ export interface Sink {
   stack: Stack;
   access: THREE.Vector3;
   isShelf: boolean;
+  /** Urgencia extra para los reponedores (p. ej. animales con hambre). */
+  priority?: () => number;
 }
 
 /** De donde se recogen productos (huertos, salidas de máquinas). */

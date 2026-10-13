@@ -1,11 +1,12 @@
 import { settings, updateSettings, type Settings } from './settings';
 import { openModal } from './ui';
 
-type Toggle = 'sound' | 'hints' | 'fullscreen' | 'showFps';
+type Toggle = 'sound' | 'music' | 'hints' | 'fullscreen' | 'showFps';
 type Choice = 'mode' | 'quality' | 'fpsLimit';
 
 const TOGGLES: { key: Toggle; title: string; desc: string }[] = [
   { key: 'sound', title: '🔊 Sonido', desc: 'Efectos al recoger, cobrar y construir' },
+  { key: 'music', title: '🎵 Música', desc: 'Alegre con buena reputación, tensa cuando baja' },
   { key: 'hints', title: '🧭 Pistas', desc: 'Texto de ayuda y flecha guía' },
   { key: 'fullscreen', title: '⛶ Pantalla completa', desc: 'Activarla al empezar a jugar' },
   { key: 'showFps', title: '📈 Mostrar FPS', desc: 'Contador de fotogramas por segundo en pantalla' },
@@ -79,7 +80,12 @@ function render(el: HTMLElement) {
       <label class="set-row">
         <span><b>${t.title}</b><small>${t.desc}</small></span>
         <input type="checkbox" class="switch" data-key="${t.key}" ${settings[t.key] ? 'checked' : ''} />
-      </label>`,
+      </label>${
+        t.key === 'music'
+          ? `<label class="set-row slider-row"><span><b>Volumen de la música</b></span>
+               <input type="range" min="0" max="100" step="5" data-range="musicVolume" value="${Math.round(settings.musicVolume * 100)}" ${settings.music ? '' : 'disabled'} /></label>`
+          : ''
+      }`,
     ).join('')}`;
 }
 
@@ -99,7 +105,13 @@ export function openSettings() {
   el.addEventListener('change', (e) => {
     const input = e.target as HTMLInputElement;
     const key = input.dataset.key as Toggle | undefined;
-    if (key) updateSettings({ [key]: input.checked });
+    if (!key) return;
+    updateSettings({ [key]: input.checked });
+    if (key === 'music') render(el);
+  });
+  el.addEventListener('input', (e) => {
+    const input = e.target as HTMLInputElement;
+    if (input.dataset.range === 'musicVolume') updateSettings({ musicVolume: Number(input.value) / 100 });
   });
   openModal('⚙️ Configuración', el, [{ label: 'Listo', primary: true }]);
 }

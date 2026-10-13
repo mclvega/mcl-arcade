@@ -55,6 +55,24 @@ export function emojiSign(emoji: string, size = 0.5): THREE.Mesh {
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: texture, transparent: true }));
 }
 
+/** Texto flotante («+3 ⭐», «+$5») que sube y se desvanece. */
+export function floatingText(text: string, color: string): THREE.Sprite {
+  const { ctx, texture } = makeCanvasTexture(256, 72);
+  ctx.font = `900 46px ${EMOJI_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.strokeText(text, 128, 38, 240);
+  ctx.fillStyle = color;
+  ctx.fillText(text, 128, 38, 240);
+  texture.needsUpdate = true;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+  s.scale.set(1.8, 0.5, 1);
+  s.renderOrder = 12;
+  return s;
+}
+
 /** Etiqueta con texto que siempre mira a la cámara (nombre del jugador). */
 export function nameTag(text: string): THREE.Sprite {
   const { ctx, canvas, texture } = makeCanvasTexture(256, 64);
@@ -108,36 +126,58 @@ export class Bubble {
   private ctx: CanvasRenderingContext2D;
   private texture: THREE.CanvasTexture;
   private text = '\u0000';
+  private mood = -1;
 
   constructor() {
-    const { ctx, texture } = makeCanvasTexture(192, 96);
+    const { ctx, texture } = makeCanvasTexture(192, 112);
     this.ctx = ctx;
     this.texture = texture;
     this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true }));
-    this.sprite.scale.set(1.3, 0.65, 1);
+    this.sprite.scale.set(1.3, 0.76, 1);
     this.sprite.center.set(0.5, 0);
     this.sprite.renderOrder = 10;
   }
 
-  set(text: string) {
-    if (text === this.text) return;
+  /**
+   * `mood` (0–1) dibuja la barra de paciencia: verde → amarillo → rojo.
+   * Se cuantiza para no redibujar el canvas en cada fotograma.
+   */
+  set(text: string, mood?: number, vip = false) {
+    const m = mood === undefined ? -1 : Math.round(Math.max(0, Math.min(1, mood)) * 20) / 20;
+    if (text === this.text && m === this.mood) return;
     this.text = text;
+    this.mood = m;
     this.sprite.visible = text !== '';
     if (!text) return;
     const c = this.ctx;
-    c.clearRect(0, 0, 192, 96);
-    c.fillStyle = '#ffffff';
+    c.clearRect(0, 0, 192, 112);
+    c.fillStyle = vip ? '#fff3c4' : '#ffffff';
     c.beginPath();
-    c.roundRect(8, 6, 176, 66, 22);
-    c.moveTo(84, 70);
-    c.lineTo(96, 90);
-    c.lineTo(108, 70);
+    c.roundRect(8, 6, 176, 82, 22);
+    c.moveTo(84, 86);
+    c.lineTo(96, 106);
+    c.lineTo(108, 86);
     c.fill();
+    if (vip) {
+      c.strokeStyle = '#ffb300';
+      c.lineWidth = 4;
+      c.stroke();
+    }
     c.fillStyle = '#333';
-    c.font = `bold 40px ${EMOJI_FONT}`;
+    c.font = `bold 38px ${EMOJI_FONT}`;
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText(text, 96, 42);
+    c.fillText(text, 96, m < 0 ? 47 : 38, 168);
+    if (m >= 0) {
+      c.fillStyle = '#e0e0e0';
+      c.beginPath();
+      c.roundRect(24, 66, 144, 12, 6);
+      c.fill();
+      c.fillStyle = `hsl(${Math.round(m * 120)}, 85%, 45%)`;
+      c.beginPath();
+      c.roundRect(24, 66, Math.max(12, 144 * m), 12, 6);
+      c.fill();
+    }
     this.texture.needsUpdate = true;
   }
 

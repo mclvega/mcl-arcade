@@ -13,6 +13,8 @@ export function initAudio() {
   }
 }
 
+export const getAudioContext = () => ctx;
+
 function tone(freq: number, dur: number, type: OscillatorType = 'sine', vol = 0.06, delay = 0, endFreq?: number) {
   if (!ctx || !settings.sound) return;
   const t0 = ctx.currentTime + delay;
@@ -50,4 +52,6 @@ export const sfx = {
   upgrade: () => [660, 990].forEach((f, i) => tone(f, 0.12, 'triangle', 0.06, i * 0.07)),
   angry: () => tone(220, 0.25, 'sawtooth', 0.03, 0, 140),
   click: () => tone(700, 0.05, 'triangle', 0.04),
+  alarm: () => [0, 0.25, 0.5, 0.75].forEach((d, i) => tone(i % 2 ? 660 : 880, 0.22, 'square', 0.03, d)),
+  caught: () => [784, 988, 1175].forEach((f, i) => tone(f, 0.12, 'square', 0.04, i * 0.06)),
 };

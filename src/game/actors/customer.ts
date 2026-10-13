@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { animateWalk, createCharacter } from '../characters';
-import { CUSTOMER_CAPACITY, CUSTOMER_PATIENCE, CUSTOMER_SPEED, LAYOUT } from '../config';
+import { CUSTOMER_CAPACITY, CUSTOMER_SPEED, LAYOUT, REPUTATION } from '../config';
 import type { Game } from '../game';
 import { itemEmoji, type ItemType } from '../items';
 import { Bubble } from '../labels';
 import { scene } from '../scene';
 import type { Shelf } from '../stations/shelf';
-import { gridLayout, Stack, transfer } from '../stack';
+import { consumeItem, gridLayout, Stack, transfer } from '../stack';
 import { faceTowards, rand, stepTowards } from '../util';
 
 const PATH = LAYOUT.path;
@@ -22,16 +22,25 @@ export interface Want {
 
 type State = 'entering' | 'toShelf' | 'atShelf' | 'queued' | 'leaving' | 'gone';
 
+/**
+ * Cliente con paciencia para toda la visita (estanterías + cola).
+ * Si se le acaba comprando, va a pagar lo que lleve con un poco de tiempo extra;
+ * si se le acaba en la cola o sin nada, se va enfadado.
+ */
 export class Customer {
   readonly group: THREE.Group;
   readonly stack: Stack;
   state: State = 'entering';
+  /** Se le acabó la paciencia comprando y paga solo lo que lleva. */
+  partial = false;
+  /** Dinero pagado en caja (para calcular la propina). */
+  spent = 0;
+  timeLeft: number;
   private body: THREE.Group;
   private bubble = new Bubble();
   private route: THREE.Vector3[];
   private wi = 0;
   private shelf?: Shelf;
-  private waitT = 0;
   private takeT = 0;
   private walkT = 0;
   private arrived = false;
@@ -41,8 +50,11 @@ export class Customer {
   constructor(
     private game: Game,
     private wants: Want[],
+    readonly patience: number,
+    readonly vip: boolean,
   ) {
-    const c = createCharacter(COLORS[Math.floor(Math.random() * COLORS.length)]);
+    this.timeLeft = patience;
+    const c = createCharacter(vip ? 0x6a1b9a : COLORS[Math.floor(Math.random() * COLORS.length)], vip ? 0xffc107 : undefined);
     this.group = c.group;
     this.body = c.body;
     this.group.position.copy(PATH.spawn);
@@ -57,13 +69,25 @@ export class Customer {
 
     this.bubble.sprite.position.y = 1.75;
     this.group.add(this.bubble.sprite);
-    this.updateBubble();
+    this.refreshBubble();
 
     this.route = [PATH.door.clone(), PATH.inside.clone().add(new THREE.Vector3(rand(-0.5, 0.5), 0, 0))];
     scene.add(this.group);
   }
 
+  get mood() {
+    return this.timeLeft / this.patience;
+  }
+
   update(dt: number) {
+    if (this.state !== 'leaving' && this.state !== 'gone' && !this.beingServed()) {
+      this.timeLeft -= dt;
+      if (this.timeLeft <= 0) {
+        this.giveUp();
+        return;
+      }
+    }
+
     let moving = false;
     switch (this.state) {
       case 'entering':
@@ -74,7 +98,6 @@ export class Customer {
         moving = true;
         if (this.walk(dt)) {
           this.state = 'atShelf';
-          this.waitT = 0;
           this.takeT = 0;
         }
         break;
@@ -96,22 +119,45 @@ export class Customer {
     }
     if (moving) this.walkT += dt;
     animateWalk(this.body, this.walkT, moving);
+    if (this.state !== 'leaving') this.refreshBubble();
   }
 
   readyToPay() {
     return this.state === 'queued' && this.arrived && this.game.register.queue[0] === this;
   }
 
-  leave(happy: boolean) {
+  /** Mientras le cobran no pierde paciencia. */
+  private beingServed() {
+    return this.readyToPay() && this.game.register.staffed;
+  }
+
+  leave(face: string) {
     this.state = 'leaving';
     this.route = [PATH.exit.clone(), PATH.door.clone(), PATH.spawn.clone()];
-    this.bubble.set(happy ? '😊' : '😠');
-    if (!happy) this.game.sfx.angry();
+    this.bubble.set(face, undefined, this.vip);
   }
 
   dispose() {
     scene.remove(this.group);
     this.bubble.dispose();
+  }
+
+  private giveUp() {
+    if (this.state === 'queued') {
+      const q = this.game.register.queue;
+      q.splice(q.indexOf(this), 1);
+      // Deja la compra y se va.
+      for (let it = this.stack.pop(); it; it = this.stack.pop()) consumeItem(it, this.group.position.clone(), undefined, 0.3);
+      this.game.onCustomerLost(this);
+      return;
+    }
+    if (this.stack.count > 0 && !this.partial) {
+      this.partial = true;
+      this.timeLeft = REPUTATION.lastChance;
+      this.joinQueue();
+      return;
+    }
+    this.game.onCustomerLost(this);
   }
 
   private shop(dt: number) {
@@ -122,20 +168,12 @@ export class Customer {
       return;
     }
     faceTowards(this.group, shelf.group.position, dt);
-    this.waitT += dt;
     this.takeT += dt;
-    if (this.takeT >= 0.4 && shelf.stack.has(w.type) && !this.stack.full) {
-      this.takeT = 0;
-      if (transfer(shelf.stack, this.stack, w.type)) {
-        w.got++;
-        this.waitT = 0;
-        this.updateBubble();
-        if (w.got >= w.qty || this.stack.full) {
-          this.wi++;
-          this.nextShelf();
-        }
-      }
-    } else if (this.waitT > CUSTOMER_PATIENCE) {
+    if (this.takeT < 0.4 || !shelf.stack.has(w.type) || this.stack.full) return;
+    this.takeT = 0;
+    if (!transfer(shelf.stack, this.stack, w.type)) return;
+    w.got++;
+    if (w.got >= w.qty || this.stack.full) {
       this.wi++;
       this.nextShelf();
     }
@@ -148,24 +186,27 @@ export class Customer {
         this.shelf = shelf;
         this.route = [shelf.access.clone().add(new THREE.Vector3(rand(-0.7, 0.7), 0, rand(0, 0.3)))];
         this.state = 'toShelf';
-        this.updateBubble();
         return;
       }
       this.wi++;
     }
     if (this.stack.count === 0) {
-      this.leave(false);
+      this.game.onCustomerLost(this);
       return;
     }
+    this.joinQueue();
+  }
+
+  private joinQueue() {
     this.game.register.queue.push(this);
     this.state = 'queued';
     this.arrived = false;
-    this.bubble.set('💵');
   }
 
-  private updateBubble() {
+  private refreshBubble() {
     const w = this.wants[this.wi];
-    if (w) this.bubble.set(`${itemEmoji(w.type)} ${w.got}/${w.qty}`);
+    const text = this.state === 'queued' ? '💵' : w ? `${itemEmoji(w.type)} ${w.got}/${w.qty}` : '💵';
+    this.bubble.set(this.vip ? `👑${text}` : text, this.mood, this.vip);
   }
 
   private walk(dt: number): boolean {

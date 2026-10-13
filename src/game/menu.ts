@@ -2,7 +2,8 @@ import { sfx } from './audio';
 import { PRODUCTS } from './items';
 import { toggleFullscreen } from './fullscreen';
 import { escapeHtml, openNameDialog, openPlayerNameDialog } from './nameDialog';
-import { clearAll, displayName, isStoreUnlocked, loadPlayerName, loadStore, loadStoreName } from './save';
+import { DIFFICULTIES } from './config';
+import { clearAll, displayName, isStoreUnlocked, loadDifficulty, loadPlayerName, loadStore, loadStoreName } from './save';
 import { openSettings } from './settingsPanel';
 import { buildUnlocks, STORES, storeProducts, type StoreDef } from './stores';
 import { $, HELP_HTML, openModal } from './ui';
@@ -34,7 +35,9 @@ function renderStores(onPlay: (s: StoreDef) => void) {
           ${
             unlocked
               ? `<div class="progress"><div style="width:${pct}%"></div></div>
-                 <small>${built}/${total} construcciones · ${products.length} productos</small>`
+                 <small>${built}/${total} construcciones · ${products.length} productos${
+                   save ? ` · ${DIFFICULTIES[loadDifficulty(store.id)].emoji} ${DIFFICULTIES[loadDifficulty(store.id)].label} · ⭐ ${Math.round(save.rep ?? DIFFICULTIES[loadDifficulty(store.id)].startRep)}` : ''
+                 }</small>`
               : `<small>Desbloquéala comprando «Nueva tienda» en ${prev?.name ?? 'la tienda anterior'}</small>`
           }
         </div>

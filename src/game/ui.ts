@@ -74,6 +74,8 @@ export const HELP_HTML = `
   <li>🛒 <b>Repón:</b> deja los productos en su estantería; los clientes los cogen y van a la caja.</li>
   <li>🧾 <b>Cobra:</b> quédate en el círculo de la caja y luego recoge los billetes 💵.</li>
   <li>🏗️ <b>Construye:</b> gasta dinero en los recuadros del suelo para ampliar la tienda y contratar personal.</li>
+  <li>⭐ <b>Reputación:</b> cada cliente tiene una barra de paciencia. Atiéndelo rápido para ganar reputación y propinas; si se va sin comprar, la pierdes. Más reputación atrae a más clientes, y si baja de 0 la tienda cierra (salvo en Relajado).</li>
+  <li>👑 <b>VIP:</b> piden más y tienen menos paciencia, pero dan el doble de reputación y propina.</li>
   <li>🗑️ <b>Basura:</b> tira lo que llevas encima si no lo necesitas.</li>
   <li>⚙️ <b>Configuración:</b> elige si todo se hace solo al acercarte o con el botón de acción (Espacio / E).</li>
   <li>🚚 <b>Nuevas tiendas:</b> al final de cada tienda puedes comprar la siguiente.</li>

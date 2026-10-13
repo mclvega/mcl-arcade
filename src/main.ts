@@ -1,5 +1,6 @@
 import './style.css';
 import { initAudio } from './game/audio';
+import { setMusicMood, startMusic } from './game/music';
 import { enterFullscreen, initFullscreen } from './game/fullscreen';
 import { Game, type Nav } from './game/game';
 import { hideMenu, showMenu } from './game/menu';
@@ -12,6 +13,14 @@ import { $, initModal } from './game/ui';
 initModal();
 initFullscreen();
 
+// El audio solo puede arrancar tras un gesto del usuario.
+const unlockAudio = () => {
+  initAudio();
+  startMusic();
+};
+window.addEventListener('pointerdown', unlockAudio);
+window.addEventListener('keydown', unlockAudio);
+
 let game: Game | null = null;
 
 function closeGame() {
@@ -23,6 +32,7 @@ const nav: Nav = {
   menu() {
     closeGame();
     history.replaceState(null, '', location.pathname);
+    setMusicMood(0.65);
     showMenu(play);
   },
   store(id) {
@@ -30,6 +40,12 @@ const nav: Nav = {
     if (!store) return;
     closeGame();
     play(store);
+  },
+  restart(id) {
+    const store = STORE_MAP.get(id);
+    if (!store) return;
+    closeGame();
+    openNameDialog(store, () => start(store));
   },
 };
 

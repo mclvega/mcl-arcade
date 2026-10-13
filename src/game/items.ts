@@ -9,7 +9,7 @@ type ShapeKind =
   | 'loaf' | 'croissant' | 'donut' | 'jar' | 'cup' | 'can' | 'pie' | 'cake' | 'popcorn' | 'candy' | 'cookie'
   | 'pizzabox' | 'calzone' | 'leaf' | 'mushroom' | 'pepper' | 'layered' | 'tyre' | 'canister' | 'battery'
   | 'pane' | 'headlight' | 'wrench' | 'bolts' | 'engine' | 'car' | 'barrel' | 'rock' | 'crystal' | 'ingot'
-  | 'bucket' | 'cash';
+  | 'bucket' | 'cash' | 'fish' | 'bed' | 'dog' | 'cat' | 'bunny' | 'bird' | 'hamster' | 'fishbag';
 
 /** Descripción compacta de la malla low-poly de un producto. */
 export interface Shape {
@@ -110,6 +110,22 @@ export const PRODUCTS: Record<string, ProductDef> = {
   bolts: { name: 'tornillos', emoji: '🔩', price: 10, shape: { k: 'bolts', c: 0xb0bec5 } },
   engine: { name: 'motores', emoji: '⚙️', price: 30, shape: { k: 'engine', c: 0x455a64, c2: 0xcfd8dc } },
   car: { name: 'coches', emoji: '🚗', price: 50, shape: { k: 'car', c: 0xe53935, c2: 0x81d4fa } },
+
+  // ── Tienda de Mascotas
+  seeds: { name: 'semillas', emoji: '🌻', price: 4, shape: { k: 'bag', c: 0xfff59d, c2: 0x8d6e63 }, grow: 'stalks', plant: 0xfdd835 },
+  cotton: { name: 'algodón', emoji: '☁️', price: 0, shape: { k: 'cluster', c: 0xffffff }, grow: 'bush', plant: 0x689f38 },
+  algae: { name: 'algas', emoji: '🌿', price: 0, shape: { k: 'leaf', c: 0x26a69a } },
+  fish: { name: 'pescado', emoji: '🐟', price: 0, shape: { k: 'fish', c: 0x90a4ae } },
+  dogfood: { name: 'pienso para perros', emoji: '🦴', price: 9, shape: { k: 'bag', c: 0xa1887f, c2: 0xe53935 } },
+  catfood: { name: 'comida para gatos', emoji: '🥫', price: 9, shape: { k: 'can', c: 0x7e57c2, c2: 0xffffff } },
+  ball: { name: 'pelotas', emoji: '🎾', price: 8, shape: { k: 'ball', c: 0xc6ff00, r: 0.1 } },
+  bed: { name: 'camas', emoji: '🛏️', price: 16, shape: { k: 'bed', c: 0x5c6bc0, c2: 0xe8eaf6 } },
+  puppy: { name: 'cachorros', emoji: '🐶', price: 30, shape: { k: 'dog', c: 0xd7a86e, c2: 0x6d4c41 } },
+  kitten: { name: 'gatitos', emoji: '🐱', price: 28, shape: { k: 'cat', c: 0x9e9e9e, c2: 0xffab91 } },
+  bunny: { name: 'conejos', emoji: '🐰', price: 14, shape: { k: 'bunny', c: 0xffffff, c2: 0xf8bbd0 } },
+  bird: { name: 'pájaros', emoji: '🐦', price: 16, shape: { k: 'bird', c: 0x42a5f5, c2: 0xffeb3b } },
+  hamster: { name: 'hámsteres', emoji: '🐹', price: 18, shape: { k: 'hamster', c: 0xffb74d, c2: 0xfff3e0 } },
+  goldfish: { name: 'peces de colores', emoji: '🐠', price: 20, shape: { k: 'fishbag', c: 0xff7043 } },
 
   cash: { name: 'dinero', emoji: '💵', price: 0, shape: { k: 'cash' } },
 };
@@ -330,6 +346,62 @@ function buildShape(s: Shape): THREE.Group {
       add(cyl(0.1, 0.085, 0.16), c2, 0, 0.08);
       add(cyl(0.095, 0.095, 0.01), c, 0, 0.16);
       break;
+    case 'fish':
+      add(new THREE.CapsuleGeometry(0.07, 0.2, 4, 8), c, 0, 0.07, 0, 0, 0, PI / 2);
+      add(new THREE.ConeGeometry(0.07, 0.1, 4), c, -0.2, 0.07, 0, 0, 0, PI / 2);
+      break;
+    case 'bed':
+      add(box(0.38, 0.1, 0.3), c, 0, 0.05);
+      add(box(0.3, 0.04, 0.22), c2, 0, 0.11);
+      break;
+    case 'dog':
+      add(box(0.26, 0.13, 0.13), c, 0, 0.14);
+      add(box(0.13, 0.13, 0.13), c, 0.16, 0.22);
+      add(box(0.05, 0.05, 0.06), 0x212121, 0.24, 0.2);
+      for (const z of [-0.06, 0.06]) add(box(0.04, 0.08, 0.03), c2, 0.14, 0.27, z);
+      for (const [x, z] of [[0.09, 0.05], [0.09, -0.05], [-0.09, 0.05], [-0.09, -0.05]]) add(box(0.04, 0.08, 0.04), c, x, 0.04, z);
+      add(box(0.1, 0.03, 0.03), c2, -0.17, 0.2, 0, 0, 0, 0.7);
+      break;
+    case 'cat':
+      add(new THREE.CapsuleGeometry(0.07, 0.16, 4, 8), c, 0, 0.12, 0, 0, 0, PI / 2);
+      add(sphere(0.08), c, 0.15, 0.2);
+      for (const z of [-0.045, 0.045]) add(new THREE.ConeGeometry(0.03, 0.06, 4), c, 0.15, 0.29, z);
+      add(sphere(0.02), c2, 0.225, 0.19);
+      add(cyl(0.015, 0.015, 0.2, 6), c, -0.16, 0.2, 0, 0, 0, 0.5);
+      for (const [x, z] of [[0.08, 0.04], [0.08, -0.04], [-0.08, 0.04], [-0.08, -0.04]]) add(cyl(0.02, 0.02, 0.06, 6), c, x, 0.03, z);
+      break;
+    case 'bunny':
+      add(sphere(0.1), c, 0, 0.1).scale.set(1.2, 1, 1);
+      add(sphere(0.07), c, 0.12, 0.18);
+      for (const z of [-0.03, 0.03]) {
+        add(box(0.03, 0.14, 0.04), c, 0.1, 0.3, z);
+        add(box(0.01, 0.1, 0.025), c2, 0.116, 0.3, z);
+      }
+      add(sphere(0.035), 0xffffff, -0.13, 0.1);
+      break;
+    case 'bird':
+      add(sphere(0.09), c, 0, 0.1).scale.set(1.2, 1, 1);
+      add(sphere(0.06), c, 0.09, 0.18);
+      add(new THREE.ConeGeometry(0.025, 0.06, 6), 0xffa000, 0.16, 0.18, 0, 0, 0, -PI / 2);
+      add(sphere(0.06), c2, -0.01, 0.12, 0.07).scale.set(1.2, 0.5, 0.4);
+      add(sphere(0.06), c2, -0.01, 0.12, -0.07).scale.set(1.2, 0.5, 0.4);
+      break;
+    case 'hamster':
+      add(sphere(0.11), c, 0, 0.1).scale.set(1.25, 0.9, 1);
+      add(sphere(0.07), c2, 0.07, 0.07).scale.set(1, 0.8, 1.2);
+      for (const z of [-0.05, 0.05]) add(sphere(0.03), c, 0.06, 0.2, z);
+      add(sphere(0.015), 0x212121, 0.13, 0.13, 0.03);
+      add(sphere(0.015), 0x212121, 0.13, 0.13, -0.03);
+      break;
+    case 'fishbag': {
+      const bag = new THREE.Mesh(sphere(0.14), new THREE.MeshLambertMaterial({ color: 0xb3e5fc, transparent: true, opacity: 0.55 }));
+      bag.position.y = 0.14;
+      g.add(bag);
+      add(cyl(0.04, 0.06, 0.06, 8), 0xb3e5fc, 0, 0.3);
+      add(sphere(0.045), c, 0.01, 0.13).scale.set(1.3, 1, 0.8);
+      add(new THREE.ConeGeometry(0.035, 0.05, 4), c, -0.06, 0.13, 0, 0, 0, PI / 2);
+      break;
+    }
     case 'cash':
       add(box(0.44, 0.06, 0.24), 0x43a047, 0, 0.03);
       add(box(0.1, 0.064, 0.244), 0xc8e6c9, 0, 0.03);

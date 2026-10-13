@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { GENERATOR_TIME_MULT, PROCESSOR_CAPACITY } from '../config';
+import { CARE, GENERATOR_TIME_MULT, PROCESSOR_CAPACITY } from '../config';
 import type { Game } from '../game';
-import { itemEmoji, itemSize, lambert, type ItemType } from '../items';
+import { createItemMesh, itemEmoji, itemSize, lambert, type ItemType } from '../items';
 import { emojiGroundLabel, emojiSprite, ring } from '../labels';
 import { castShadows, mesh } from '../props';
 import { scene } from '../scene';
@@ -172,6 +172,11 @@ function buildVisual(def: MachineDef): Visual {
     }
   }
 
+  if (def.style === 'habitat' || def.style === 'aquarium') {
+    animate = buildHabitat(g, def);
+    signY = def.style === 'aquarium' ? 2.1 : 1.9;
+  }
+
   if (animals.length) {
     const prev = animate;
     animate = (t, w) => {
@@ -181,6 +186,54 @@ function buildVisual(def: MachineDef): Visual {
   }
   castShadows(g, true);
   return { group: g, signY, animate };
+}
+
+/** Corral de mascotas (o acuario) con animales que se mueven. */
+function buildHabitat(g: THREE.Group, def: MachineDef): Visual['animate'] {
+  const pets: THREE.Object3D[] = [];
+  if (def.style === 'aquarium') {
+    g.add(mesh(new THREE.BoxGeometry(1.8, 0.5, 1.2), def.color, 0, 0.25, 0));
+    const glass = new THREE.Mesh(
+      new THREE.BoxGeometry(1.7, 0.9, 1.1),
+      new THREE.MeshLambertMaterial({ color: 0x81d4fa, transparent: true, opacity: 0.4, depthWrite: false }),
+    );
+    glass.position.y = 0.95;
+    g.add(glass, mesh(new THREE.BoxGeometry(1.6, 0.06, 1.0), 0xfff59d, 0, 0.53, 0));
+    for (let i = 0; i < 4; i++) {
+      const fish = new THREE.Group();
+      fish.add(mesh(new THREE.SphereGeometry(0.08, 8, 6), i % 2 ? 0xff7043 : 0xffca28), mesh(new THREE.ConeGeometry(0.06, 0.1, 4), 0xff7043, -0.1, 0, 0).rotateZ(PI / 2));
+      fish.children[0].scale.set(1.4, 1, 0.7);
+      g.add(fish);
+      pets.push(fish);
+    }
+    return (t) =>
+      pets.forEach((f, i) => {
+        const a = t * (0.6 + i * 0.15) + i * 1.7;
+        f.position.set(Math.cos(a) * 0.6, 0.8 + Math.sin(t * 1.3 + i) * 0.2, Math.sin(a) * 0.35);
+        f.rotation.y = -a - PI / 2;
+      });
+  }
+  g.add(mesh(new THREE.BoxGeometry(1.9, 0.05, 1.9), 0x9ccc65, 0, 0.025, 0));
+  for (const [x, z, w, d] of [[0, -0.95, 1.9, 0.06], [0, 0.95, 1.9, 0.06], [-0.95, 0, 0.06, 1.9], [0.95, 0, 0.06, 1.9]])
+    g.add(mesh(new THREE.BoxGeometry(w, 0.3, d), 0xffffff, x, 0.15, z));
+  const house = new THREE.Group();
+  const roof = mesh(new THREE.ConeGeometry(0.55, 0.4, 4), 0xc62828, 0, 0.7, 0);
+  roof.rotation.y = PI / 4;
+  house.add(mesh(new THREE.BoxGeometry(0.7, 0.5, 0.6), def.color, 0, 0.25, 0), roof, mesh(new THREE.BoxGeometry(0.25, 0.3, 0.02), 0x3e2723, 0, 0.15, 0.31));
+  house.position.set(-0.45, 0, -0.45);
+  g.add(house, mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.08, 10), 0x90a4ae, 0.55, 0.06, -0.55));
+  for (let i = 0; i < 3; i++) {
+    const pet = createItemMesh(def.output);
+    pet.scale.setScalar(1.8);
+    g.add(pet);
+    pets.push(pet);
+  }
+  return (t, working) =>
+    pets.forEach((p, i) => {
+      const a = t * 0.5 + i * 2.1;
+      p.position.set(0.2 + Math.cos(a) * 0.45, working ? Math.abs(Math.sin(t * 6 + i)) * 0.06 : 0, 0.15 + Math.sin(a * 1.3) * 0.4);
+      p.rotation.y = -a * 1.3;
+    });
 }
 
 /** Máquina (entrada → salida) o generador (solo salida). */
@@ -198,9 +251,15 @@ export class Processor implements Source {
   private bar: THREE.Mesh;
   private barBg: THREE.Mesh;
   private center: THREE.Vector3;
+  /** Solo hábitats: nivel de comida (0–1). */
+  hunger = 1;
+  private hungryT = 0;
+  private foodBar?: THREE.Mesh;
+  private sign: THREE.Sprite;
+  private sadSign?: THREE.Sprite;
 
   constructor(
-    game: Game,
+    private game: Game,
     readonly def: MachineDef,
     x: number,
     z: number,
@@ -213,6 +272,7 @@ export class Processor implements Source {
 
     const sign = emojiSprite(def.emoji, 0.75);
     sign.position.set(0, this.visual.signY, 0);
+    this.sign = sign;
     // Barra de progreso girada 45° para verse horizontal desde la cámara isométrica.
     const barHolder = new THREE.Group();
     barHolder.position.set(0, this.visual.signY - 0.6, 0);
@@ -222,6 +282,21 @@ export class Processor implements Source {
     this.bar.position.x = -0.57;
     barHolder.add(this.barBg, this.bar);
     this.group.add(sign, barHolder);
+
+    if (def.care) {
+      // Barra de comida y cartel triste cuando tienen hambre.
+      const foodBg = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.06), BAR_BG);
+      foodBg.position.y = -0.22;
+      this.foodBar = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.09, 0.08).translate(0.57, 0, 0), new THREE.MeshBasicMaterial({ color: 0x43a047 }));
+      this.foodBar.position.set(-0.57, -0.22, 0);
+      const bowl = emojiSprite('🍽️', 0.3);
+      bowl.position.set(-0.78, -0.22, 0);
+      barHolder.add(foodBg, this.foodBar, bowl);
+      this.sadSign = emojiSprite('😿', 0.75);
+      this.sadSign.position.copy(sign.position);
+      this.sadSign.visible = false;
+      this.group.add(this.sadSign);
+    }
 
     const makePallet = (dx: number, type: ItemType) => {
       const pallet = new THREE.Mesh(PALLET_GEO, lambert(0xbcaaa4));
@@ -242,7 +317,13 @@ export class Processor implements Source {
     if (def.input) {
       const input = makePallet(-1.9, def.input);
       this.input = input;
-      this.sink = { type: def.input, stack: input, access: new THREE.Vector3(x - 1.9, 0, z + 1.1), isShelf: false };
+      this.sink = {
+        type: def.input,
+        stack: input,
+        access: new THREE.Vector3(x - 1.9, 0, z + 1.1),
+        isShelf: false,
+        priority: def.care ? () => (1 - this.hunger) * 1.5 : undefined,
+      };
       game.addZone({
         pos: new THREE.Vector3(x - 1.9, 0, z),
         radius: 1.05,
@@ -274,10 +355,37 @@ export class Processor implements Source {
     game.obstacles.push(boxAt(x, z, 1.9, 1.9));
   }
 
+  get hungry() {
+    return !!this.def.care && this.hunger <= 0;
+  }
+
+  /** Hábitats: comen de su comedero; si se vacía, dejan de criar y la tienda pierde reputación. */
+  private updateCare(dt: number) {
+    this.hunger = Math.max(0, this.hunger - dt / CARE.drainTime);
+    if (this.hunger < CARE.feedAt && this.input && this.input.count > 0) {
+      const it = this.input.pop();
+      if (it) consumeItem(it, this.center, undefined, 0.3);
+      this.hunger = Math.min(1, this.hunger + CARE.feedAmount);
+    }
+    if (this.hungry) {
+      this.hungryT += dt;
+      if (this.hungryT >= CARE.penaltyEvery) {
+        this.hungryT = 0;
+        this.game.onPetsHungry(this);
+      }
+    } else this.hungryT = 0;
+    const bar = this.foodBar!;
+    bar.scale.x = Math.max(0.001, this.hunger);
+    (bar.material as THREE.MeshBasicMaterial).color.setHSL(this.hunger * 0.33, 0.85, 0.45);
+    this.sign.visible = !this.hungry;
+    this.sadSign!.visible = this.hungry;
+  }
+
   update(dt: number, processTime: number) {
     this.elapsed += dt;
+    if (this.def.care) this.updateCare(dt);
     const time = this.input ? processTime : processTime * GENERATOR_TIME_MULT;
-    const working = (!this.input || this.input.count > 0) && !this.output.full;
+    const working = (!this.input || this.input.count > 0) && !this.output.full && !this.hungry;
     if (working) {
       this.t += dt;
       if (this.t >= time) {

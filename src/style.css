@@ -503,6 +503,12 @@ button {
   line-height: 1.4;
 }
 
+.upg-cat {
+  margin: 14px 0 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+
 .upg {
   display: grid;
   grid-template-columns: 44px 1fr auto;
@@ -601,6 +607,11 @@ button {
   cursor: pointer;
 }
 
+.slider-row input[type='range'] {
+  width: 160px;
+  accent-color: var(--accent);
+}
+
 .switch {
   appearance: none;
   flex: none;
@@ -633,6 +644,166 @@ button {
 
 .switch:checked::after {
   transform: translateX(20px);
+}
+
+/* ───────── Pedido especial ───────── */
+
+#order {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  width: 210px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--ui-bg);
+  box-shadow: var(--shadow);
+  border-left: 5px solid #ff7043;
+}
+
+.order-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.order-head b {
+  flex: 1;
+}
+
+.order-time {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-close {
+  border: 0;
+  border-radius: 8px;
+  padding: 2px 7px;
+  background: #f1f1f1;
+  cursor: pointer;
+}
+
+.order-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 6px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.order-lines .done {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.order-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: #e0e0e0;
+  overflow: hidden;
+}
+
+.order-bar div {
+  height: 100%;
+}
+
+.order-reward {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  #order {
+    top: auto;
+    bottom: 132px;
+    right: 12px;
+    width: 180px;
+  }
+}
+
+/* ───────── Reputación ───────── */
+
+#rep {
+  --rep: 50%;
+  --rep-color: #43a047;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--ui-bg);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+#rep .rep-bar {
+  width: 80px;
+  height: 10px;
+  border-radius: 99px;
+  background: #e0e0e0;
+  overflow: hidden;
+}
+
+#rep .rep-fill {
+  display: block;
+  width: var(--rep);
+  height: 100%;
+  background: var(--rep-color);
+  transition: width 0.3s, background 0.3s;
+}
+
+#rep.danger {
+  animation: rep-pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes rep-pulse {
+  to {
+    background: #ffcdd2;
+    transform: scale(1.05);
+  }
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.stats div {
+  padding: 10px;
+  border-radius: 12px;
+  background: #f5f5f5;
+  text-align: center;
+}
+
+.stats b {
+  display: block;
+  font-size: 22px;
+}
+
+.stats small {
+  color: var(--muted);
+}
+
+.difficulty-pick {
+  margin-top: 14px;
+  border-bottom: 0;
+}
+
+.difficulty-pick .segmented button {
+  padding: 8px 4px;
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.difficulty-pick .segmented button span {
+  font-size: 12px;
 }
 
 /* ───────── Nombres y pantalla completa ───────── */

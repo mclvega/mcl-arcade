@@ -1,4 +1,5 @@
-import { displayName, loadPlayerName, loadStoreName, savePlayerName, saveStoreName } from './save';
+import { DIFFICULTIES, DIFFICULTY_ORDER, type DifficultyId } from './config';
+import { displayName, loadDifficulty, loadPlayerName, loadStoreName, saveDifficulty, savePlayerName, saveStoreName } from './save';
 import type { StoreDef } from './stores';
 import { openModal } from './ui';
 
@@ -13,6 +14,8 @@ interface PromptOptions {
   maxLen: number;
   /** Si existe, muestra el botón 🎲 para pedir otra idea. */
   suggest?: () => string;
+  /** Contenido adicional bajo el campo de texto. */
+  extra?: HTMLElement;
   /** Se llama una sola vez, al confirmar o al cerrar la ventana. */
   onDone: (value: string) => void;
 }
@@ -28,6 +31,7 @@ function promptText(o: PromptOptions) {
       ${o.suggest ? '<button type="button" class="dice" title="Otra idea" aria-label="Otra idea">🎲</button>' : ''}
     </div>`;
   const input = el.querySelector<HTMLInputElement>('input')!;
+  if (o.extra) el.append(o.extra);
 
   let done = false;
   const finish = () => {
@@ -76,6 +80,33 @@ export function openNameDialog(store: StoreDef, onDone: () => void, firstTime = 
   const ideas = player ? [`${store.name} de ${player}`, ...store.names] : store.names;
   let i = 0;
   const suggest = () => ideas[++i % ideas.length];
+
+  // La dificultad solo se elige al abrir (o reabrir tras cerrar) la tienda.
+  let difficulty: DifficultyId = loadDifficulty(store.id);
+  let extra: HTMLElement | undefined;
+  if (firstTime) {
+    extra = document.createElement('div');
+    extra.className = 'set-block difficulty-pick';
+    const render = () => {
+      const d = DIFFICULTIES[difficulty];
+      extra!.innerHTML = `
+        <b>Dificultad</b>
+        <div class="segmented" role="radiogroup" style="grid-template-columns: repeat(${DIFFICULTY_ORDER.length}, 1fr)">
+          ${DIFFICULTY_ORDER.map(
+            (id) =>
+              `<button type="button" role="radio" data-diff="${id}" class="${id === difficulty ? 'on' : ''}" aria-checked="${id === difficulty}">${DIFFICULTIES[id].emoji}<br><span>${DIFFICULTIES[id].label}</span></button>`,
+          ).join('')}
+        </div>
+        <small>${d.desc}${d.canLose ? ' Si la reputación baja de 0, la tienda cierra.' : ''}</small>`;
+    };
+    render();
+    extra.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-diff]');
+      if (!btn) return;
+      difficulty = btn.dataset.diff as DifficultyId;
+      render();
+    });
+  }
   promptText({
     title: firstTime ? 'Ponle nombre a tu tienda' : '✏️ Cambiar nombre',
     emoji: store.emoji,
@@ -84,8 +115,10 @@ export function openNameDialog(store: StoreDef, onDone: () => void, firstTime = 
     confirm: firstTime ? 'Abrir tienda ▶' : 'Guardar',
     maxLen: 24,
     suggest,
+    extra,
     onDone: (name) => {
       saveStoreName(store.id, name || displayName(store));
+      if (firstTime) saveDifficulty(store.id, difficulty);
       onDone();
     },
   });

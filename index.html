@@ -41,6 +41,7 @@
       <div class="hud-left">
         <div id="money"><span class="coin">$</span><span id="money-value">0</span></div>
         <div id="store-name"></div>
+        <div id="rep" title="Reputación"><span>⭐</span><span class="rep-bar"><span class="rep-fill"></span></span><span class="rep-value">50</span><span class="rep-diff"></span></div>
       </div>
       <div class="hud-buttons">
         <button id="btn-home" type="button" aria-label="Menú">🏠</button>
@@ -49,6 +50,17 @@
         <button id="btn-settings" type="button" aria-label="Configuración">⚙️</button>
       </div>
       <div id="hint" class="hidden"></div>
+    </div>
+
+    <div id="order" hidden>
+      <div class="order-head">
+        <b>📦 Pedido especial</b>
+        <span class="order-time"></span>
+        <button type="button" class="order-close" title="Rechazar pedido" aria-label="Rechazar pedido">✕</button>
+      </div>
+      <div class="order-lines"></div>
+      <div class="order-bar"><div></div></div>
+      <small class="order-reward"></small>
     </div>
 
     <button id="action-btn" type="button" hidden><span class="act-icon"></span><span class="act-label"></span></button>

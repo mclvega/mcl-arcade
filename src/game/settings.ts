@@ -4,6 +4,9 @@ export interface Settings {
   /** auto: recoger/soltar/comprar al acercarse · manual: con el botón de acción. */
   mode: 'auto' | 'manual';
   sound: boolean;
+  /** Música de fondo que cambia con la reputación de la tienda. */
+  music: boolean;
+  musicVolume: number;
   /** Resolución, sombras y suavizado de bordes. */
   quality: 'low' | 'medium' | 'high';
   /** Límite de fotogramas por segundo (0 = el máximo de la pantalla). */
@@ -19,6 +22,8 @@ const isTouch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coars
 const DEFAULTS: Settings = {
   mode: 'auto',
   sound: true,
+  music: true,
+  musicVolume: 0.5,
   quality: isTouch ? 'medium' : 'high',
   fpsLimit: 60,
   showFps: false,

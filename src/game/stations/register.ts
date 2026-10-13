@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Customer } from '../actors/customer';
-import { CASH_PILE_CAPACITY, CHECKOUT_INTERVAL } from '../config';
+import { CASH_PILE_CAPACITY } from '../config';
 import type { Game } from '../game';
 import { PRODUCTS } from '../items';
 import { emojiGroundLabel, ring } from '../labels';
@@ -17,6 +17,8 @@ export class Register {
   readonly cashPile: Stack;
   readonly cashPos: THREE.Vector3;
   staffed = false;
+  /** Segundos que lleva el dinero sin recogerse (atrae ladrones). */
+  cashIdle = 0;
   private t = 0;
   private elapsed = 0;
   private top: THREE.Vector3;
@@ -74,6 +76,7 @@ export class Register {
       act: () => {
         const it = this.cashPile.pop();
         if (!it) return;
+        this.cashIdle = 0;
         const chest = game.player.pos.clone().setY(1.0);
         consumeItem(it, chest, undefined, 0.22);
         game.addMoney(it.value);
@@ -97,8 +100,9 @@ export class Register {
 
   update(dt: number) {
     this.elapsed += dt;
+    this.cashIdle = this.cashPile.count > 0 ? this.cashIdle + dt : 0;
     const game = this.game;
-    this.staffed = game.cashierHired || distXZ(game.player.pos, this.cashierSpot) < 1.0;
+    this.staffed = game.cashierOnDuty || distXZ(game.player.pos, this.cashierSpot) < 1.0;
 
     const front = this.queue[0];
     const waiting = !!front && front.readyToPay();
@@ -111,16 +115,18 @@ export class Register {
       return;
     }
     this.t += dt;
-    if (this.t < CHECKOUT_INTERVAL) return;
+    if (this.t < game.checkoutInterval) return;
     this.t = 0;
     const it = front.stack.pop();
     if (it) {
       consumeItem(it, this.top, undefined, 0.2);
-      this.addCash(Math.round((PRODUCTS[it.type]?.price ?? 0) * game.store.saleMult));
+      const price = Math.round((PRODUCTS[it.type]?.price ?? 0) * game.store.saleMult);
+      front.spent += price;
+      this.addCash(price);
       game.sfx.cash();
     } else {
       this.queue.shift();
-      front.leave(true);
+      game.onCustomerPaid(front);
     }
   }
 }

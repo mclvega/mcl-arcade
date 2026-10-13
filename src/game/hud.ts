@@ -1,9 +1,11 @@
-import { UPGRADES } from './config';
+import { REPUTATION, UPGRADE_CATEGORIES, UPGRADES, type DifficultyDef } from './config';
 import type { Game } from './game';
 import { toggleFullscreen } from './fullscreen';
 import { openSettings } from './settingsPanel';
 import { settings } from './settings';
+import type { SpecialOrder } from './stations/order';
 import type { Zone } from './types';
+import { itemEmoji } from './items';
 import { $, isModalOpen, openModal, toast } from './ui';
 import { formatMoney } from './util';
 
@@ -12,6 +14,9 @@ export class Hud {
   private moneyValue = $('money-value');
   private hintEl = $('hint');
   private fpsEl = $('fps');
+  private repEl = $('rep');
+  private orderEl = $('order');
+  private orderKey = '';
   private actionBtn = $<HTMLButtonElement>('action-btn');
   private actionIcon = this.actionBtn.querySelector<HTMLElement>('.act-icon')!;
   private actionLabel = this.actionBtn.querySelector<HTMLElement>('.act-label')!;
@@ -30,6 +35,7 @@ export class Hud {
     $('btn-upgrades').addEventListener('click', () => this.openUpgrades(), opts);
     $('btn-settings').addEventListener('click', () => openSettings(), opts);
     $('btn-fullscreen').addEventListener('click', () => toggleFullscreen(), opts);
+    this.orderEl.querySelector('.order-close')!.addEventListener('click', () => game.rejectOrder(), opts);
 
     const btn = this.actionBtn;
     btn.addEventListener('pointerdown', (e) => {
@@ -47,6 +53,41 @@ export class Hud {
     btn.addEventListener('contextmenu', (e) => e.preventDefault(), opts);
   }
 
+  /** Barra de reputación (0–100) con el emoji de la dificultad. */
+  setRep(rep: number, d: DifficultyDef) {
+    const pct = Math.max(0, Math.min(100, rep));
+    const color = rep < REPUTATION.warning ? '#e53935' : rep < 50 ? '#ffb300' : '#43a047';
+    this.repEl.style.setProperty('--rep', `${pct}%`);
+    this.repEl.style.setProperty('--rep-color', color);
+    this.repEl.querySelector('.rep-value')!.textContent = `${Math.round(rep)}`;
+    this.repEl.querySelector('.rep-diff')!.textContent = d.emoji;
+    this.repEl.title = `Reputación ${Math.round(rep)}/100 · Dificultad ${d.label}`;
+    this.repEl.classList.toggle('danger', rep < REPUTATION.warning);
+  }
+
+  /** Tarjeta del pedido especial (null la oculta). */
+  setOrder(o: SpecialOrder | null) {
+    if (!o || !o.active) {
+      this.orderEl.hidden = true;
+      this.orderKey = '';
+      return;
+    }
+    const secs = Math.max(0, Math.ceil(o.timeLeft));
+    const key = `${secs}|${o.lines.map((l) => l.got).join(',')}`;
+    if (key === this.orderKey) return;
+    this.orderKey = key;
+    this.orderEl.hidden = false;
+    this.orderEl.querySelector('.order-time')!.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+    this.orderEl.querySelector('.order-lines')!.innerHTML = o.lines
+      .map((l) => `<span class="${l.got >= l.qty ? 'done' : ''}">${itemEmoji(l.type)} ${l.got}/${l.qty}</span>`)
+      .join('');
+    const frac = o.timeLeft / o.total;
+    const bar = this.orderEl.querySelector<HTMLElement>('.order-bar div')!;
+    bar.style.width = `${Math.max(0, frac * 100)}%`;
+    bar.style.background = `hsl(${Math.round(frac * 120)}, 80%, 45%)`;
+    this.orderEl.querySelector('.order-reward')!.textContent = `Recompensa: $${formatMoney(o.reward)} y ⭐`;
+  }
+
   /** Contador de FPS (opción «Mostrar FPS»). `null` lo reinicia. */
   setFps(fps: number | null) {
     this.fpsEl.hidden = !settings.showFps;
@@ -56,6 +97,7 @@ export class Hud {
   dispose() {
     this.abort.abort();
     this.fpsEl.hidden = true;
+    this.orderEl.hidden = true;
     $('hud').hidden = true;
     this.actionBtn.hidden = true;
     this.hintEl.classList.add('hidden');
@@ -115,18 +157,26 @@ export class Hud {
   private renderUpgrades() {
     const g = this.game;
     const el = this.upgradesEl!;
-    const rows = UPGRADES.filter((u) => !u.requires || g.hasBuilt(u.requires)).map((u) => {
-      const lvl = g.level(u.id);
-      const maxed = lvl >= u.max;
-      const cost = g.upgradePrice(u.id);
-      return `<div class="upg">
-        <div class="upg-icon">${u.icon}</div>
-        <div class="upg-info"><b>${u.name}</b><span class="lvl">Nv ${lvl}/${u.max}</span><small>${u.desc}</small></div>
-        <button type="button" data-id="${u.id}" ${maxed || g.money < cost ? 'disabled' : ''}>${maxed ? 'MÁX' : `$${formatMoney(cost)}`}</button>
-      </div>`;
-    });
+    const rows: string[] = [];
+    for (const cat of UPGRADE_CATEGORIES) {
+      const list = UPGRADES.filter((u) => u.category === cat.id && (!u.requires || g.hasBuilt(u.requires)));
+      if (!list.length) continue;
+      rows.push(`<h3 class="upg-cat">${cat.title}</h3>`);
+      for (const u of list) {
+        const lvl = g.level(u.id);
+        const maxed = lvl >= u.max;
+        const cost = g.upgradePrice(u.id);
+        rows.push(`<div class="upg">
+          <div class="upg-icon">${u.icon}</div>
+          <div class="upg-info"><b>${u.name}</b><span class="lvl">Nv ${lvl}/${u.max}</span><small>${u.desc}</small></div>
+          <button type="button" data-id="${u.id}" ${maxed || g.money < cost ? 'disabled' : ''}>${maxed ? 'MÁX' : `$${formatMoney(cost)}`}</button>
+        </div>`);
+      }
+    }
     const built = g.unlocks.filter((d) => g.unlocked.has(d.id)).length;
-    rows.push(`<p class="muted center">Construcciones: ${built}/${g.unlocks.length}</p>`);
+    const s = g.stats;
+    rows.push(`<p class="muted center">Construcciones: ${built}/${g.unlocks.length}<br>
+      ${g.difficulty.emoji} ${g.difficulty.label} · ⭐ ${Math.round(g.rep)} · ${s.served} clientes atendidos · ${s.lost} perdidos · $${formatMoney(s.tips)} en propinas</p>`);
     el.innerHTML = rows.join('');
   }
 }

@@ -3,7 +3,7 @@ import { PRODUCTS } from './items';
 
 // ───────── Máquinas y generadores ─────────
 
-export type MachineStyle = 'oven' | 'barn' | 'factory' | 'pen' | 'water' | 'hive' | 'mill' | 'mine' | 'oilwell';
+export type MachineStyle = 'oven' | 'barn' | 'factory' | 'pen' | 'water' | 'hive' | 'mill' | 'mine' | 'oilwell' | 'habitat' | 'aquarium';
 
 export interface MachineDef {
   name: string;
@@ -14,6 +14,8 @@ export interface MachineDef {
   input?: string;
   output: string;
   animal?: 'cow' | 'hen';
+  /** Hábitat de mascotas: hay que mantener su comedero lleno o pierde reputación. */
+  care?: boolean;
 }
 
 export const MACHINES: Record<string, MachineDef> = {
@@ -73,6 +75,19 @@ export const MACHINES: Record<string, MachineDef> = {
   boltfactory: { name: 'Tornillería', emoji: '🔩', style: 'factory', color: 0x90a4ae, input: 'steel', output: 'bolts' },
   enginefactory: { name: 'Motores', emoji: '⚙️', style: 'factory', color: 0x78909c, input: 'steel', output: 'engine' },
   assembly: { name: 'Ensambladora', emoji: '🚗', style: 'factory', color: 0xff8a65, input: 'engine', output: 'car' },
+  // Tienda de Mascotas
+  fishpond: { name: 'Estanque', emoji: '🐟', style: 'water', color: 0x8d6e63, output: 'fish' },
+  algaepond: { name: 'Estanque de algas', emoji: '🌿', style: 'water', color: 0x4db6ac, output: 'algae' },
+  petfoodfactory: { name: 'Fábrica de pienso', emoji: '🦴', style: 'factory', color: 0xbcaaa4, input: 'corn', output: 'dogfood' },
+  catcannery: { name: 'Conservera', emoji: '🥫', style: 'factory', color: 0xb39ddb, input: 'fish', output: 'catfood' },
+  toyfactory: { name: 'Juguetería', emoji: '🎾', style: 'factory', color: 0xdce775, input: 'latex', output: 'ball' },
+  bedworkshop: { name: 'Taller de camas', emoji: '🛏️', style: 'factory', color: 0x9fa8da, input: 'cotton', output: 'bed' },
+  kennel: { name: 'Criadero', emoji: '🐶', style: 'habitat', color: 0xd7a86e, input: 'dogfood', output: 'puppy', care: true },
+  cattery: { name: 'Gatera', emoji: '🐱', style: 'habitat', color: 0xb0bec5, input: 'catfood', output: 'kitten', care: true },
+  hutch: { name: 'Conejera', emoji: '🐰', style: 'habitat', color: 0xf8bbd0, input: 'carrot', output: 'bunny', care: true },
+  aviary: { name: 'Pajarera', emoji: '🐦', style: 'habitat', color: 0x90caf9, input: 'seeds', output: 'bird', care: true },
+  hamstery: { name: 'Hamstería', emoji: '🐹', style: 'habitat', color: 0xffcc80, input: 'seeds', output: 'hamster', care: true },
+  aquarium: { name: 'Acuario', emoji: '🐠', style: 'aquarium', color: 0x6d4c41, input: 'algae', output: 'goldfish', care: true },
 };
 
 // ───────── Tiendas ─────────
@@ -127,7 +142,27 @@ export const STORES: StoreDef[] = [
       'machine:coop', 'shelf:egg', 'field:apple', 'shelf:apple', 'stocker', 'machine:cowbarn', 'shelf:milk',
       'field:wheat', 'machine:oven', 'shelf:bread', 'machine:ketchupper', 'shelf:ketchup', 'machine:dairy',
       'shelf:cheese', 'stocker', 'machine:juicer', 'shelf:carrotjuice', 'machine:popper', 'shelf:popcorn',
-      'machine:piebakery', 'shelf:applepie', 'stocker', 'expansion:pizzeria',
+      'machine:piebakery', 'shelf:applepie', 'stocker', 'expansion:mascotas',
+    ],
+  },
+  {
+    id: 'mascotas',
+    name: 'Tienda de Mascotas',
+    emoji: '🐾',
+    tagline: 'Cría, alimenta y cuida mascotas felices.',
+    names: ['Patitas Felices', 'Mundo Mascota', 'El Arca de McL', 'Huellitas', 'Bigotes y Colas'],
+    saleMult: 1.15,
+    costMult: 1.25,
+    startSteps: 3,
+    expansionPrice: 2200,
+    theme: { sky: 0x9ccc65, ground: 0x9ccc65, farm: 0xaed581, floorA: 0xe3f2fd, floorB: 0xbbdefb, wall: 0xede7f6, sign: 0x8e24aa, shelf: 0xffb74d, shelfBack: 0xfb8c00, trees: 'round', accent: '#8e24aa' },
+    steps: [
+      'field:carrot', 'machine:hutch', 'shelf:bunny', 'cashier', 'shelf:carrot', 'field:seeds', 'machine:aviary',
+      'shelf:bird', 'shelf:seeds', 'stocker', 'field:corn', 'machine:petfoodfactory', 'machine:kennel', 'shelf:puppy',
+      'shelf:dogfood', 'machine:hamstery', 'shelf:hamster', 'machine:fishpond', 'machine:catcannery', 'machine:cattery',
+      'shelf:kitten', 'shelf:catfood', 'stocker', 'machine:algaepond', 'machine:aquarium', 'shelf:goldfish',
+      'field:latex', 'machine:toyfactory', 'shelf:ball', 'field:cotton', 'machine:bedworkshop', 'shelf:bed', 'stocker',
+      'expansion:pizzeria',
     ],
   },
   {
