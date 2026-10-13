@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { animateWalk, createCharacter } from '../characters';
-import { CUSTOMER_CAPACITY, CUSTOMER_PATH, CUSTOMER_PATIENCE, CUSTOMER_SPEED } from '../config';
+import { CUSTOMER_CAPACITY, CUSTOMER_PATIENCE, CUSTOMER_SPEED, LAYOUT } from '../config';
 import type { Game } from '../game';
-import { ITEM_INFO, type ItemType } from '../items';
+import { itemEmoji, type ItemType } from '../items';
 import { Bubble } from '../labels';
 import { scene } from '../scene';
 import type { Shelf } from '../stations/shelf';
 import { gridLayout, Stack, transfer } from '../stack';
 import { faceTowards, rand, stepTowards } from '../util';
 
+const PATH = LAYOUT.path;
 const COLORS = [0xef5350, 0xab47bc, 0x7e57c2, 0x26a69a, 0xffa726, 0x8d6e63, 0xec407a, 0x66bb6a, 0xffca28];
 const BOX_GEO = new THREE.BoxGeometry(0.62, 0.22, 0.42);
 const BOX_MAT = new THREE.MeshLambertMaterial({ color: 0xd7b98e });
@@ -44,7 +45,7 @@ export class Customer {
     const c = createCharacter(COLORS[Math.floor(Math.random() * COLORS.length)]);
     this.group = c.group;
     this.body = c.body;
-    this.group.position.copy(CUSTOMER_PATH.spawn);
+    this.group.position.copy(PATH.spawn);
 
     const box = new THREE.Mesh(BOX_GEO, BOX_MAT);
     box.position.set(0, 0.7, 0.42);
@@ -58,7 +59,7 @@ export class Customer {
     this.group.add(this.bubble.sprite);
     this.updateBubble();
 
-    this.route = [CUSTOMER_PATH.door.clone(), CUSTOMER_PATH.inside.clone().add(new THREE.Vector3(rand(-0.5, 0.5), 0, 0))];
+    this.route = [PATH.door.clone(), PATH.inside.clone().add(new THREE.Vector3(rand(-0.5, 0.5), 0, 0))];
     scene.add(this.group);
   }
 
@@ -103,7 +104,7 @@ export class Customer {
 
   leave(happy: boolean) {
     this.state = 'leaving';
-    this.route = [CUSTOMER_PATH.exit.clone(), CUSTOMER_PATH.door.clone(), CUSTOMER_PATH.spawn.clone()];
+    this.route = [PATH.exit.clone(), PATH.door.clone(), PATH.spawn.clone()];
     this.bubble.set(happy ? '😊' : '😠');
     if (!happy) this.game.sfx.angry();
   }
@@ -164,7 +165,7 @@ export class Customer {
 
   private updateBubble() {
     const w = this.wants[this.wi];
-    if (w) this.bubble.set(`${ITEM_INFO[w.type].emoji} ${w.got}/${w.qty}`);
+    if (w) this.bubble.set(`${itemEmoji(w.type)} ${w.got}/${w.qty}`);
   }
 
   private walk(dt: number): boolean {

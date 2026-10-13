@@ -3,35 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#8bc34a" />
-    <meta name="description" content="Cultiva, cosecha y vende en tu propia tienda de granja. Juego idle arcade gratis en el navegador." />
+    <meta name="theme-color" content="#1b5e20" />
+    <meta name="description" content="McL Arcade: cultiva, fabrica y vende en tus propias tiendas. Juego idle arcade gratis en el navegador." />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <title>Granja &amp; Tienda</title>
+    <title>McL Arcade</title>
   </head>
   <body>
     <div id="app"></div>
 
-    <div id="hud">
-      <div id="money"><span class="coin">$</span><span id="money-value">0</span></div>
+    <div id="menu" hidden>
+      <div class="menu-bg" aria-hidden="true">
+        <span>🍅</span><span>🍕</span><span>🥐</span><span>🛒</span><span>🚗</span><span>🌽</span><span>🧀</span><span>🍩</span><span>🛞</span><span>🥛</span>
+      </div>
+      <main class="menu-inner">
+        <header class="menu-head">
+          <h1 class="logo"><span class="logo-mcl">McL</span> Arcade</h1>
+          <p class="tagline">Cultiva, fabrica y vende. Haz crecer tu cadena de tiendas.</p>
+        </header>
+        <section id="store-list" class="store-list" aria-label="Tiendas"></section>
+        <footer class="menu-foot">
+          <button id="menu-settings" type="button">⚙️ Configuración</button>
+          <button id="menu-help" type="button">❓ Cómo jugar</button>
+          <button id="menu-reset" type="button" class="danger">Borrar progreso</button>
+        </footer>
+      </main>
+    </div>
+
+    <div id="hud" hidden>
+      <div class="hud-left">
+        <div id="money"><span class="coin">$</span><span id="money-value">0</span></div>
+        <div id="store-name"></div>
+      </div>
       <div class="hud-buttons">
+        <button id="btn-home" type="button" aria-label="Menú">🏠</button>
         <button id="btn-upgrades" type="button">⬆ Mejoras</button>
-        <button id="btn-sound" type="button" aria-label="Sonido">🔊</button>
+        <button id="btn-settings" type="button" aria-label="Configuración">⚙️</button>
       </div>
       <div id="hint" class="hidden"></div>
     </div>
 
+    <button id="action-btn" type="button" hidden><span class="act-icon"></span><span class="act-label"></span></button>
     <div id="joystick"><div id="joy-knob"></div></div>
 
-    <div id="panel" hidden>
-      <div class="panel-card">
+    <div id="modal" hidden>
+      <div class="panel-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
         <div class="panel-head">
-          <h2>Mejoras</h2>
-          <button id="panel-close" type="button" aria-label="Cerrar">✕</button>
+          <h2 id="modal-title"></h2>
+          <button id="modal-close" type="button" aria-label="Cerrar">✕</button>
         </div>
-        <div id="upgrade-list"></div>
-        <div class="panel-foot">
-          <button id="btn-reset" type="button" class="danger">Reiniciar partida</button>
-        </div>
+        <div id="modal-body"></div>
+        <div id="modal-foot" class="panel-foot"></div>
       </div>
     </div>
 

@@ -3,32 +3,26 @@ import { Customer, type Want } from './actors/customer';
 import { Player } from './actors/player';
 import { Worker, type StockTask } from './actors/worker';
 import { initAudio, sfx } from './audio';
-import {
-  PLAYER_START,
-  REGISTER_POS,
-  START_MONEY,
-  STATS,
-  UNLOCKS,
-  upgradeCost,
-  UPGRADES,
-  type UnlockDef,
-} from './config';
+import { LAYOUT, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES } from './config';
 import { Hud } from './hud';
 import { Input } from './input';
-import { ITEM_INFO, type ItemType } from './items';
-import { clearSave, loadSave, writeSave } from './save';
+import { itemName, type ItemType } from './items';
+import { loadStore, saveStore, unlockStore } from './save';
 import { scene } from './scene';
+import { onSettingsChange, settings } from './settings';
 import { BuyZone } from './stations/buyzone';
 import { Plot } from './stations/plot';
 import { Processor } from './stations/processor';
 import { Register } from './stations/register';
 import { Shelf } from './stations/shelf';
-import { updateTweens, popIn } from './tween';
+import { TrashBin } from './stations/trash';
+import { buildUnlocks, MACHINES, startMoney, STORE_MAP, type StoreDef, type UnlockDef, type UnlockKind } from './stores';
+import { popIn, updateTweens } from './tween';
 import type { Sink, Source, Zone } from './types';
+import { isModalOpen, openModal } from './ui';
 import { damp, distXZ, randInt, shuffle, type Box } from './util';
 import { buildWorld } from './world';
 
-const UNLOCK_MAP = new Map<string, UnlockDef>(UNLOCKS.map((d) => [d.id, d]));
 const CAM_OFFSET = new THREE.Vector3(12, 16, 12);
 
 export class Game {
@@ -44,13 +38,15 @@ export class Game {
   readonly workers: Worker[] = [];
   readonly buyZones = new Map<string, BuyZone>();
   readonly unlocked = new Set<string>();
+  readonly unlocks: UnlockDef[];
   readonly player: Player;
   readonly register: Register;
   readonly input: Input;
   readonly hud: Hud;
-  money = START_MONEY;
+  money: number;
   cashierHired = false;
 
+  private unlockMap: Map<string, UnlockDef>;
   private upgrades: Record<string, number> = {};
   private clock = new THREE.Clock();
   private spawnTimer = 1.5;
@@ -62,21 +58,31 @@ export class Game {
   private camFocus: { pos: THREE.Vector3; t: number }[] = [];
   private marker: THREE.Mesh;
   private arrow: THREE.Mesh;
-  private resetting = false;
+  private actionHeld = false;
+  private actionPulse = false;
+  private actionZone: Zone | null = null;
 
-  constructor(container: HTMLElement) {
+  constructor(
+    container: HTMLElement,
+    readonly store: StoreDef,
+  ) {
+    this.unlocks = buildUnlocks(store);
+    this.unlockMap = new Map(this.unlocks.map((u) => [u.id, u]));
+    this.money = startMoney(store, this.unlocks);
+
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = settings.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
 
-    buildWorld(this);
+    buildWorld(this, store.theme, store.name);
     this.input = new Input(this.renderer.domElement, document.getElementById('joystick')!, document.getElementById('joy-knob')!);
-    this.player = new Player(STATS.playerCapacity(0), PLAYER_START);
+    this.player = new Player(STATS.playerCapacity(0), LAYOUT.playerStart);
     scene.add(this.player.group);
-    this.register = new Register(this, REGISTER_POS);
-    for (const def of UNLOCKS) this.buyZones.set(def.id, new BuyZone(this, def));
+    this.register = new Register(this, LAYOUT.register);
+    new TrashBin(this, LAYOUT.trash);
+    for (const def of this.unlocks) this.buyZones.set(def.id, new BuyZone(this, def));
     this.hud = new Hud(this);
 
     this.marker = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 16).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffd54f }));
@@ -98,9 +104,13 @@ export class Game {
       if (document.hidden) this.save();
     });
     window.addEventListener('pagehide', () => this.save());
+    onSettingsChange(() => this.applySettings());
     this.resize();
 
-    if (this.unlocked.size === 0) this.hud.toast('Muévete con WASD / flechas o arrastrando en la pantalla', 4500);
+    if (this.unlocked.size === 0) {
+      const how = settings.mode === 'manual' ? 'y usa el botón de acción (o Espacio)' : 'y acércate a las cosas para usarlas';
+      this.hud.toast(`Muévete con WASD / flechas o arrastrando ${how}`, 5000);
+    }
   }
 
   start() {
@@ -128,11 +138,20 @@ export class Game {
     return STATS.staffCapacity(this.level('staff'));
   }
 
+  hasBuilt(kind: UnlockKind) {
+    return this.unlocks.some((u) => u.kind === kind && this.unlocked.has(u.id));
+  }
+
+  upgradePrice(id: string) {
+    const u = UPGRADES.find((x) => x.id === id)!;
+    return upgradeCost(u, this.level(id), this.store.costMult);
+  }
+
   buyUpgrade(id: string) {
     const u = UPGRADES.find((x) => x.id === id);
     if (!u) return;
     const lvl = this.level(id);
-    const cost = upgradeCost(u, lvl);
+    const cost = this.upgradePrice(id);
     if (lvl >= u.max || this.money < cost) return;
     this.money -= cost;
     this.upgrades[id] = lvl + 1;
@@ -156,6 +175,17 @@ export class Game {
     this.money = Math.max(0, this.money - v);
   }
 
+  // ───────── Botón de acción (modo manual) ─────────
+
+  actionDown() {
+    this.actionHeld = true;
+    this.actionPulse = true;
+  }
+
+  actionUp() {
+    this.actionHeld = false;
+  }
+
   // ───────── Construcción y progresión ─────────
 
   addZone(z: Omit<Zone, 'timer'>) {
@@ -164,7 +194,7 @@ export class Game {
 
   unlock(id: string, instant = false) {
     if (this.unlocked.has(id)) return;
-    const def = UNLOCK_MAP.get(id);
+    const def = this.unlockMap.get(id);
     if (!def) return;
     this.unlocked.add(id);
     this.buyZones.get(id)?.hide();
@@ -172,20 +202,20 @@ export class Game {
     let obj: THREE.Object3D | undefined;
     switch (def.kind) {
       case 'shelf': {
-        const s = new Shelf(this, def.product!, def.x, def.z);
+        const s = new Shelf(this, def.ref!, def.x, def.z);
         this.shelves.push(s);
         obj = s.group;
         if (this.shelves.length === 1) this.spawnTimer = Math.min(this.spawnTimer, 2);
         break;
       }
-      case 'plot': {
-        const p = new Plot(this, def.product!, def.x, def.z);
+      case 'field': {
+        const p = new Plot(this, def.ref!, def.x, def.z);
         this.plots.push(p);
         obj = p.group;
         break;
       }
-      case 'processor': {
-        const p = new Processor(this, def.input!, def.output!, def.machine!, def.x, def.z);
+      case 'machine': {
+        const p = new Processor(this, MACHINES[def.ref!], def.x, def.z);
         this.processors.push(p);
         obj = p.group;
         break;
@@ -203,24 +233,56 @@ export class Game {
         obj = w.group;
         break;
       }
+      case 'expansion':
+        unlockStore(def.ref!);
+        break;
     }
 
-    if (!instant) {
-      if (obj) popIn(obj);
-      sfx.unlock();
-      this.refreshZones(true);
-      this.save();
-      if (this.unlocked.size === UNLOCKS.length) this.hud.toast('🎉 ¡Tienda completa! Sigue mejorando en el panel de mejoras', 5000);
+    if (instant) return;
+    if (obj) popIn(obj);
+    sfx.unlock();
+    this.refreshZones(true);
+    this.save();
+    if (def.kind === 'expansion') this.showExpansion(def.ref!);
+    else if (this.unlocked.size === this.unlocks.length) this.hud.toast('🎉 ¡Tienda completa! Sigue mejorando en el panel de mejoras', 5000);
+  }
+
+  private showExpansion(storeId: string) {
+    const next = STORE_MAP.get(storeId);
+    if (!next) return;
+    openModal(
+      '¡Nueva tienda desbloqueada!',
+      `<p class="big-emoji">${next.emoji}</p><p><b>${next.name}</b> ya está disponible.<br>${next.tagline}</p>`,
+      [
+        { label: 'Seguir aquí' },
+        { label: `Ir a ${next.name} ▶`, primary: true, onClick: () => this.goToStore(next.id) },
+      ],
+    );
+  }
+
+  /** Muestra las siguientes zonas de compra pendientes, en orden. */
+  private refreshZones(animate: boolean) {
+    let shown = 0;
+    for (const def of this.unlocks) {
+      if (shown >= REVEAL_WINDOW) break;
+      const z = this.buyZones.get(def.id)!;
+      if (z.done) continue;
+      if (!z.revealed) {
+        z.reveal(animate);
+        if (animate) this.camFocus.push({ pos: z.pos.clone(), t: 1.0 });
+      }
+      shown++;
     }
   }
 
-  private refreshZones(animate: boolean) {
-    for (const z of this.buyZones.values()) {
-      if (z.revealed || z.done) continue;
-      if (!z.def.requires.every((r) => this.unlocked.has(r))) continue;
-      z.reveal(animate);
-      if (animate) this.camFocus.push({ pos: z.pos.clone(), t: 1.1 });
-    }
+  goToMenu() {
+    this.save();
+    location.href = location.pathname;
+  }
+
+  goToStore(id: string) {
+    this.save();
+    location.href = `${location.pathname}?tienda=${id}`;
   }
 
   // ───────── Consultas para la IA ─────────
@@ -232,11 +294,13 @@ export class Game {
   }
 
   sourcesFor(type: ItemType): Source[] {
-    return [...this.plots.filter((p) => p.type === type), ...this.processors.filter((p) => p.outputType === type)];
+    return [...this.plots.filter((p) => p.type === type), ...this.processors.filter((p) => p.type === type)];
   }
 
   sinks(): Sink[] {
-    return [...this.shelves, ...this.processors.map((p) => p.sink)];
+    const sinks: Sink[] = [...this.shelves];
+    for (const p of this.processors) if (p.sink) sinks.push(p.sink);
+    return sinks;
   }
 
   /** Destino con menor ocupación que tenga producto disponible (estanterías primero). */
@@ -269,21 +333,9 @@ export class Game {
 
   private update(dt: number) {
     this.elapsed += dt;
-    const input = this.hud.panelOpen ? { x: 0, y: 0 } : this.input.vector();
-    this.player.update(dt, input, this.playerSpeed, this.obstacles);
-
-    const pp = this.player.pos;
-    for (const z of this.zones) {
-      if ((z.enabled && !z.enabled()) || distXZ(pp, z.pos) > z.radius) {
-        z.timer = z.interval;
-        continue;
-      }
-      z.timer = Math.min(z.timer + dt, z.interval * 3);
-      while (z.timer >= z.interval) {
-        z.timer -= z.interval;
-        z.act();
-      }
-    }
+    const paused = isModalOpen();
+    this.player.update(dt, paused ? { x: 0, y: 0 } : this.input.vector(), this.playerSpeed, this.obstacles);
+    this.updateZones(dt, paused);
 
     for (const p of this.plots) p.update(dt, this.growTime);
     for (const p of this.processors) p.update(dt, this.processTime);
@@ -315,21 +367,70 @@ export class Game {
     }
   }
 
+  /** Automático: actúan todas las zonas cercanas. Manual: solo la más cercana, mientras se pulsa el botón. */
+  private updateZones(dt: number, paused: boolean) {
+    const pp = this.player.pos;
+    const manual = settings.mode === 'manual';
+    const held = (this.actionHeld || this.actionPulse || this.input.actionHeld) && !paused;
+    this.actionPulse = false;
+    let best: Zone | null = null;
+    let bestD = Infinity;
+
+    for (const z of this.zones) {
+      const d = distXZ(pp, z.pos);
+      const active = !paused && d <= z.radius && (!z.enabled || z.enabled()) && z.canAct();
+      if (!active) {
+        z.timer = z.interval;
+        continue;
+      }
+      if (manual) {
+        if (d < bestD) {
+          bestD = d;
+          best = z;
+        }
+        continue;
+      }
+      this.tickZone(z, dt);
+    }
+
+    if (manual) {
+      if (best !== this.actionZone && this.actionZone) this.actionZone.timer = this.actionZone.interval;
+      if (best && held) this.tickZone(best, dt);
+      else if (best) best.timer = best.interval;
+    }
+    this.actionZone = manual ? best : null;
+    this.hud.setAction(this.actionZone);
+  }
+
+  private tickZone(z: Zone, dt: number) {
+    z.timer = Math.min(z.timer + dt, z.interval * 3);
+    while (z.timer >= z.interval) {
+      z.timer -= z.interval;
+      if (!z.canAct()) break;
+      z.act();
+    }
+  }
+
   private updateSpawner(dt: number) {
     if (this.shelves.length === 0) return;
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;
     const n = this.shelves.length;
-    this.spawnTimer = Math.max(2.2, 6.5 - n * 0.8) * (0.8 + Math.random() * 0.4);
-    if (this.customers.length >= 3 + n * 1.5) return;
+    this.spawnTimer = Math.max(1.6, 6.5 - n * 0.45) * (0.8 + Math.random() * 0.4);
+    if (this.customers.length >= Math.min(16, 3 + n * 1.2)) return;
 
     const types = shuffle([...new Set(this.shelves.map((s) => s.type))]);
-    const nTypes = Math.min(types.length, Math.random() < 0.15 ? 3 : randInt(1, 2));
+    const nTypes = Math.min(types.length, Math.random() < 0.2 ? 3 : randInt(1, 2));
     const wants: Want[] = types.slice(0, nTypes).map((type) => ({ type, qty: randInt(1, nTypes > 1 ? 2 : 3), got: 0 }));
     this.customers.push(new Customer(this, wants));
   }
 
   private updateHint() {
+    if (!settings.hints) {
+      this.hud.setHint('');
+      this.hintTarget = null;
+      return;
+    }
     const p = this.player;
     let text = '';
     let target: THREE.Vector3 | null = null;
@@ -337,10 +438,11 @@ export class Game {
       .filter((z) => z.revealed && !z.done && this.money >= z.remaining)
       .sort((a, b) => a.remaining - b.remaining);
     const front = this.register.queue[0];
+    const verb = settings.mode === 'manual' ? 'Pulsa el botón sobre la zona' : 'Párate sobre la zona';
 
-    if (!this.unlocked.has('plot_tomato') && affordable.length) {
+    if (this.unlocked.size < 2 && affordable.length) {
       target = affordable[0].pos;
-      text = `Párate sobre la zona para comprar: ${affordable[0].def.label}`;
+      text = `${verb} para comprar: ${affordable[0].def.label}`;
     } else if (front?.readyToPay() && !this.register.staffed) {
       target = this.register.cashierSpot;
       text = '¡Un cliente espera! Ve a la caja 🧾';
@@ -360,7 +462,10 @@ export class Game {
       }
       if (bestSink) {
         target = bestSink.access;
-        text = `Lleva ${ITEM_INFO[bestSink.type].name} ${bestSink.isShelf ? 'a la estantería' : 'a la máquina'}`;
+        text = `Lleva ${itemName(bestSink.type)} ${bestSink.isShelf ? 'a la estantería' : 'a la máquina'}`;
+      } else {
+        target = LAYOUT.trash;
+        text = 'No hay dónde dejarlo: tíralo a la basura 🗑️';
       }
     } else if (affordable.length) {
       target = affordable[0].pos;
@@ -370,9 +475,8 @@ export class Game {
         .filter((s) => !s.stack.full && this.sourcesFor(s.type).some((src) => src.available() > 0))
         .sort((a, b) => a.stack.count / a.stack.capacity - b.stack.count / b.stack.capacity)[0];
       if (sink) {
-        const src = this.sourcesFor(sink.type).find((s) => s.available() > 0)!;
-        target = src.access;
-        text = `Recoge ${ITEM_INFO[sink.type].name}`;
+        target = this.sourcesFor(sink.type).find((s) => s.available() > 0)!.access;
+        text = `Recoge ${itemName(sink.type)}`;
       }
     }
     this.hud.setHint(text);
@@ -420,27 +524,31 @@ export class Game {
     this.renderer.setSize(w, h);
   }
 
+  private applySettings() {
+    if (this.renderer.shadowMap.enabled !== settings.shadows) {
+      this.renderer.shadowMap.enabled = settings.shadows;
+      scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        if (m) (Array.isArray(m) ? m : [m]).forEach((x) => (x.needsUpdate = true));
+      });
+    }
+    this.hintTimer = 0;
+  }
+
   // ───────── Guardado ─────────
 
   save() {
-    if (this.resetting) return;
     const paid: Record<string, number> = {};
     for (const [id, z] of this.buyZones) if (!z.done && z.paid > 0) paid[id] = z.paid;
-    writeSave({ v: 1, money: Math.floor(this.money), unlocked: [...this.unlocked], paid, upgrades: this.upgrades });
-  }
-
-  reset() {
-    this.resetting = true;
-    clearSave();
-    location.reload();
+    saveStore(this.store.id, { money: Math.floor(this.money), unlocked: [...this.unlocked], paid, upgrades: this.upgrades });
   }
 
   private loadGame() {
-    const data = loadSave();
+    const data = loadStore(this.store.id);
     if (data) {
       this.money = data.money;
       this.upgrades = { ...data.upgrades };
-      for (const def of UNLOCKS) if (data.unlocked.includes(def.id)) this.unlock(def.id, true);
+      for (const def of this.unlocks) if (data.unlocked.includes(def.id)) this.unlock(def.id, true);
       for (const [id, v] of Object.entries(data.paid ?? {})) {
         const z = this.buyZones.get(id);
         if (z && !z.done) {

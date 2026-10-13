@@ -1,155 +1,122 @@
 import * as THREE from 'three';
+import { LAYOUT } from './config';
 import type { Game } from './game';
+import { lambert } from './items';
 import { makeCanvasTexture, UI_FONT } from './labels';
+import { castShadows, mesh, pineTree, roundTree } from './props';
 import { scene } from './scene';
+import type { Theme } from './stores';
 import { boxAt } from './util';
 
-const lambert = (color: number) => new THREE.MeshLambertMaterial({ color });
+const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
-function floorTexture() {
+function floorTexture(t: Theme) {
   const { ctx, texture } = makeCanvasTexture(64, 64);
-  ctx.fillStyle = '#f6e7c8';
+  ctx.fillStyle = hex(t.floorA);
   ctx.fillRect(0, 0, 64, 64);
-  ctx.fillStyle = '#ecd9b2';
+  ctx.fillStyle = hex(t.floorB);
   ctx.fillRect(0, 0, 32, 32);
   ctx.fillRect(32, 32, 32, 32);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(7, 7);
+  texture.repeat.set(9, 9);
   texture.magFilter = THREE.NearestFilter;
   return texture;
 }
 
-function storeSign() {
-  const { ctx, texture } = makeCanvasTexture(512, 96);
-  ctx.fillStyle = '#e53935';
+function storeSign(text: string, color: number) {
+  const { ctx, texture } = makeCanvasTexture(640, 110);
+  ctx.fillStyle = hex(color);
   ctx.beginPath();
-  ctx.roundRect(0, 0, 512, 96, 20);
+  ctx.roundRect(0, 0, 640, 110, 24);
   ctx.fill();
   ctx.fillStyle = '#fff';
-  ctx.font = `bold 54px ${UI_FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('GRANJA & TIENDA', 256, 52);
+  let size = 64;
+  do ctx.font = `bold ${size}px ${UI_FONT}`;
+  while (ctx.measureText(text).width > 590 && --size > 20);
+  ctx.fillText(text, 320, 60);
   texture.needsUpdate = true;
-  return new THREE.Mesh(new THREE.PlaneGeometry(5.6, 1.05), new THREE.MeshBasicMaterial({ map: texture }));
+  return new THREE.Mesh(new THREE.PlaneGeometry(7, 1.2), new THREE.MeshBasicMaterial({ map: texture }));
 }
 
-function tree(x: number, z: number, s = 1) {
-  const g = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.9, 6), lambert(0x795548));
-  trunk.position.y = 0.45;
-  const crown = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.8, 7), lambert(0x2e7d32));
-  crown.position.y = 1.7;
-  const crown2 = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.3, 7), lambert(0x388e3c));
-  crown2.position.y = 2.4;
-  g.add(trunk, crown, crown2);
-  g.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh) o.castShadow = true;
-  });
-  g.position.set(x, 0, z);
-  g.scale.setScalar(s);
-  g.rotation.y = Math.random() * Math.PI;
-  scene.add(g);
+function plane(w: number, d: number, color: number | THREE.Material, x: number, y: number, z: number) {
+  const mat = typeof color === 'number' ? lambert(color) : color;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(x, y, z);
+  m.receiveShadow = true;
+  scene.add(m);
+  return m;
 }
 
-/** Suelo, luces, tienda y decorado. */
-export function buildWorld(game: Game) {
-  scene.background = new THREE.Color(0x9ccc65);
+/** Suelo, luces, tienda y decorado según el tema de la tienda. */
+export function buildWorld(game: Game, theme: Theme, title: string) {
+  scene.background = new THREE.Color(theme.sky);
 
   const hemi = new THREE.HemisphereLight(0xfff8e7, 0x6b8e4e, 1.4);
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-  sun.position.set(10, 22, 8);
+  sun.position.set(16, 24, 10);
+  sun.target.position.set(6, 0, 0);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
-  sc.left = -28;
-  sc.right = 28;
-  sc.top = 28;
-  sc.bottom = -28;
+  sc.left = -32;
+  sc.right = 32;
+  sc.top = 32;
+  sc.bottom = -32;
   sc.near = 1;
-  sc.far = 70;
+  sc.far = 80;
   sun.shadow.bias = -0.0005;
   sun.shadow.normalBias = 0.03;
-  scene.add(hemi, sun);
+  scene.add(hemi, sun, sun.target);
 
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), lambert(0x8bc34a));
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
+  const { store: S, farm: F, doorZ } = LAYOUT;
+  plane(180, 180, theme.ground, 6, 0, 0);
+  plane(S.maxX - S.minX, S.maxZ - S.minZ, new THREE.MeshLambertMaterial({ map: floorTexture(theme) }), (S.minX + S.maxX) / 2, 0.01, (S.minZ + S.maxZ) / 2);
+  plane(6, 2.2, 0xd7b98e, S.minX - 3, 0.012, doorZ);
+  plane(F.maxX - F.minX, F.maxZ - F.minZ, theme.farm, (F.minX + F.maxX) / 2, 0.008, (F.minZ + F.maxZ) / 2);
 
-  // Suelo de la tienda: x ∈ [-12, 2], z ∈ [-8, 6]
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.MeshLambertMaterial({ map: floorTexture() }));
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(-5, 0.01, -1);
-  floor.receiveShadow = true;
-  scene.add(floor);
-
-  // Camino de entrada de clientes
-  const path = new THREE.Mesh(new THREE.PlaneGeometry(6, 2), lambert(0xd7b98e));
-  path.rotation.x = -Math.PI / 2;
-  path.position.set(-15, 0.012, 4);
-  path.receiveShadow = true;
-  scene.add(path);
-
-  // Tierra de la granja
-  const farm = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), lambert(0x9ccc65));
-  farm.rotation.x = -Math.PI / 2;
-  farm.position.set(11, 0.008, 0);
-  farm.receiveShadow = true;
-  scene.add(farm);
-
-  // Paredes (trasera e izquierda con hueco de puerta en z ∈ [2.8, 5.2])
-  const wallMat = lambert(0xefe2c8);
+  // Paredes: trasera e izquierda (con hueco de puerta)
   const walls: [number, number, number, number][] = [
-    [-5, -8, 14.3, 0.3],
-    [-12, -2.6, 0.3, 10.8],
-    [-12, 5.6, 0.3, 0.8],
+    [(S.minX + S.maxX) / 2, S.minZ, S.maxX - S.minX + 0.3, 0.3],
+    [S.minX, (S.minZ + doorZ - 1.2) / 2, 0.3, doorZ - 1.2 - S.minZ],
+    [S.minX, (doorZ + 1.2 + S.maxZ) / 2, 0.3, S.maxZ - doorZ - 1.2],
   ];
   for (const [x, z, w, d] of walls) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 1.4, d), wallMat);
-    m.position.set(x, 0.7, z);
+    const m = mesh(new THREE.BoxGeometry(w, 1.4, d), theme.wall, x, 0.7, z);
     m.castShadow = true;
     m.receiveShadow = true;
     scene.add(m);
     game.obstacles.push(boxAt(x, z, w, d));
   }
-  const sign = storeSign();
-  sign.position.set(-5, 2.0, -7.84);
-  scene.add(sign);
-  const signBoard = new THREE.Mesh(new THREE.BoxGeometry(5.8, 1.2, 0.1), lambert(0xffffff));
-  signBoard.position.set(-5, 2.0, -7.9);
-  scene.add(signBoard);
+  const signBoard = mesh(new THREE.BoxGeometry(7.2, 1.4, 0.1), 0xffffff, (S.minX + S.maxX) / 2, 2.1, S.minZ + 0.05);
+  const sign = storeSign(title.toUpperCase(), theme.sign);
+  sign.position.set((S.minX + S.maxX) / 2, 2.1, S.minZ + 0.11);
+  scene.add(signBoard, sign);
 
-  // Valla de la granja
-  const postGeo = new THREE.BoxGeometry(0.12, 0.6, 0.12);
-  const railGeo = new THREE.BoxGeometry(16, 0.08, 0.06);
-  const fenceMat = lambert(0xffffff);
-  for (const z of [-8, 8.5]) {
-    const rail = new THREE.Mesh(railGeo, fenceMat);
-    rail.position.set(11, 0.45, z);
-    scene.add(rail);
-    for (let x = 3; x <= 19; x += 2) {
-      const post = new THREE.Mesh(postGeo, fenceMat);
-      post.position.set(x, 0.3, z);
+  // Valla de la zona de producción
+  const fenceMat = 0xffffff;
+  for (const z of [F.minZ, F.maxZ]) {
+    scene.add(mesh(new THREE.BoxGeometry(F.maxX - F.minX, 0.08, 0.06), fenceMat, (F.minX + F.maxX) / 2, 0.45, z));
+    for (let x = F.minX; x <= F.maxX; x += 2) {
+      const post = mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), fenceMat, x, 0.3, z);
       post.castShadow = true;
       scene.add(post);
     }
   }
 
-  for (const [x, z, s] of [
-    [-17, -10, 1.1],
-    [-17, -3, 0.9],
-    [-17, 9, 1],
-    [21, -9, 1.2],
-    [21.5, 0, 1],
-    [21, 8, 1.1],
-    [-4, 10.5, 0.9],
-    [5, 11, 1],
-    [14, 11, 1.2],
-    [-9, -11, 1],
-    [3, -11, 1.1],
-    [12, -11, 0.9],
-  ]) {
-    tree(x, z, s);
+  const trees: [number, number, number][] = [
+    [-21, -12, 1.1], [-21, -4, 0.9], [-22, 10, 1], [33, -10, 1.2], [33.5, 0, 1], [33, 9, 1.1],
+    [-8, 12, 0.9], [6, 13.5, 1], [16, 13.5, 1.2], [26, 13.5, 1], [-12, -13, 1], [2, -13, 1.1],
+    [12, -13, 0.9], [22, -13, 1.1],
+  ];
+  for (const [x, z, s] of trees) {
+    const t = theme.trees === 'pine' ? pineTree() : roundTree();
+    t.position.set(x, 0, z);
+    t.scale.setScalar(s);
+    t.rotation.y = Math.random() * Math.PI;
+    scene.add(t);
   }
+  castShadows(signBoard);
 }

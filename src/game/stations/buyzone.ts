@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import type { UnlockDef } from '../config';
 import type { Game } from '../game';
 import { createCoinMesh } from '../items';
 import { EMOJI_FONT, groundPlane, makeCanvasTexture, UI_FONT } from '../labels';
 import { scene } from '../scene';
 import { flyAndRemove } from '../stack';
+import type { UnlockDef } from '../stores';
 import { popIn } from '../tween';
+import { formatMoney } from '../util';
 
 /** Recuadro en el suelo que se "llena" con dinero y desbloquea algo. */
 export class BuyZone {
@@ -25,8 +26,7 @@ export class BuyZone {
     const { ctx, texture } = makeCanvasTexture(256, 256);
     this.ctx = ctx;
     this.texture = texture;
-    const plane = groundPlane(texture, 2.3);
-    this.group.add(plane);
+    this.group.add(groundPlane(texture, 2.3));
     this.group.position.set(def.x, 0.04, def.z);
     this.group.visible = false;
     scene.add(this.group);
@@ -36,7 +36,10 @@ export class BuyZone {
       pos: this.pos,
       radius: 1.15,
       interval: 0.045,
+      label: 'Comprar',
+      icon: def.icon,
       enabled: () => this.revealed && !this.done,
+      canAct: () => this.remaining <= 0 || game.money >= 1,
       act: () => this.pay(),
     });
   }
@@ -58,20 +61,18 @@ export class BuyZone {
 
   private pay() {
     const game = this.game;
-    if (this.remaining <= 0) {
-      game.unlock(this.def.id);
-      return;
+    if (this.remaining > 0) {
+      if (game.money < 1) return;
+      const step = Math.max(1, Math.ceil(this.def.price / 25));
+      const amount = Math.min(step, Math.floor(game.money), this.remaining);
+      game.spendMoney(amount);
+      this.paid += amount;
+      const coin = createCoinMesh();
+      coin.position.copy(game.player.pos).setY(1.1);
+      flyAndRemove(coin, this.pos.clone().setY(0.1), 0.25);
+      game.sfx.pay();
+      this.draw();
     }
-    if (game.money < 1) return;
-    const step = Math.max(1, Math.ceil(this.def.price / 25));
-    const amount = Math.min(step, Math.floor(game.money), this.remaining);
-    game.spendMoney(amount);
-    this.paid += amount;
-    const coin = createCoinMesh();
-    coin.position.copy(game.player.pos).setY(1.1);
-    flyAndRemove(coin, this.pos.clone().setY(0.1), 0.25);
-    game.sfx.pay();
-    this.draw();
     if (this.remaining <= 0) game.unlock(this.def.id);
   }
 
@@ -79,7 +80,7 @@ export class BuyZone {
     const c = this.ctx;
     const { icon, label } = this.def;
     c.clearRect(0, 0, 256, 256);
-    c.fillStyle = 'rgba(0,0,0,0.22)';
+    c.fillStyle = 'rgba(0,0,0,0.25)';
     c.beginPath();
     c.roundRect(12, 12, 232, 232, 28);
     c.fill();
@@ -108,10 +109,12 @@ export class BuyZone {
     c.shadowColor = 'rgba(0,0,0,0.45)';
     c.shadowBlur = 6;
     c.fillStyle = '#ffffff';
-    c.font = `bold 30px ${UI_FONT}`;
+    let size = 30;
+    do c.font = `bold ${size}px ${UI_FONT}`;
+    while (c.measureText(label).width > 212 && --size > 14);
     c.fillText(label, 128, 144);
     c.font = `bold 48px ${UI_FONT}`;
-    c.fillText(`$${this.remaining}`, 128, 198);
+    c.fillText(`$${formatMoney(this.remaining)}`, 128, 198);
     c.shadowBlur = 0;
     this.texture.needsUpdate = true;
   }

@@ -1,96 +1,81 @@
 import * as THREE from 'three';
-import type { ItemType } from './items';
 
-// ───────── Economía y ritmo (equilibrar aquí, no en la lógica) ─────────
+export const GAME_NAME = 'McL Arcade';
 
-export const START_MONEY = 20;
-export const PRICES: Partial<Record<ItemType, number>> = { tomato: 3, bread: 8, egg: 6 };
+// ───────── Ritmo y capacidades ─────────
 
 export const SHELF_CAPACITY = 12;
 export const PROCESSOR_CAPACITY = 8;
-export const CASH_PILE_CAPACITY = 36;
+export const CASH_PILE_CAPACITY = 40;
 export const CUSTOMER_CAPACITY = 6;
-export const CUSTOMER_PATIENCE = 22;
-export const CUSTOMER_SPEED = 2.4;
-export const CHECKOUT_INTERVAL = 0.22;
+export const CUSTOMER_PATIENCE = 24;
+export const CUSTOMER_SPEED = 2.6;
+export const CHECKOUT_INTERVAL = 0.2;
+/** Cuántas zonas de compra se muestran a la vez. */
+export const REVEAL_WINDOW = 3;
+/** Los generadores (establo, mina…) tardan más que una máquina normal. */
+export const GENERATOR_TIME_MULT = 1.5;
 
 export const STATS = {
   playerCapacity: (lvl: number) => 6 + 2 * lvl,
-  playerSpeed: (lvl: number) => 4.6 * (1 + 0.08 * lvl),
+  playerSpeed: (lvl: number) => 4.8 * (1 + 0.08 * lvl),
   growTime: (lvl: number) => 5 * Math.pow(0.88, lvl),
   processTime: (lvl: number) => 3 * Math.pow(0.88, lvl),
   staffSpeed: (lvl: number) => 3.2 * (1 + 0.1 * lvl),
   staffCapacity: (lvl: number) => 4 + lvl,
 };
 
-// ───────── Mapa ─────────
+// ───────── Mapa (común a todas las tiendas) ─────────
 
-export const REGISTER_POS = new THREE.Vector3(-9, 0, 0);
-export const PLAYER_START = new THREE.Vector3(-6, 0, 1.5);
-export const BOUNDS = { minX: -11.6, maxX: 19, minZ: -7.6, maxZ: 9.5 };
-export const CUSTOMER_PATH = {
-  spawn: new THREE.Vector3(-15.5, 0, 4),
-  door: new THREE.Vector3(-11.4, 0, 4),
-  inside: new THREE.Vector3(-6.5, 0, 4),
-  exit: new THREE.Vector3(-6.2, 0, 5.6),
+const v = (x: number, z: number) => new THREE.Vector3(x, 0, z);
+
+const SHELF_XS = [-7.5, -4.3, -1.1];
+const SHELF_ZS = [3.2, -0.4, -4, -7.6];
+const FARM_XS = [7.5, 13.5, 19.5, 25.5];
+const FARM_ZS = [-7.5, -3.5, 0.5, 4.5, 8.5];
+
+export const LAYOUT = {
+  store: { minX: -16, maxX: 2, minZ: -10, maxZ: 8 },
+  farm: { minX: 4, maxX: 29.5, minZ: -10, maxZ: 11.5 },
+  doorZ: 5.2,
+  register: v(-13, -1),
+  playerStart: v(-9, 2),
+  bounds: { minX: -15.6, maxX: 29, minZ: -9.6, maxZ: 11.2 },
+  path: { spawn: v(-19.5, 5.2), door: v(-15.3, 5.2), inside: v(-10, 5.2), exit: v(-9.6, 6.8) },
+  /** De delante hacia el fondo de la tienda. */
+  shelfSlots: SHELF_ZS.flatMap((z) => SHELF_XS.map((x) => v(x, z))),
+  /** Ordenadas por cercanía a la tienda. */
+  farmSlots: FARM_XS.flatMap((x) => FARM_ZS.map((z) => v(x, z))).sort(
+    (a, b) => Math.hypot(a.x - 3, (a.z - 0.5) * 1.2) - Math.hypot(b.x - 3, (b.z - 0.5) * 1.2),
+  ),
+  staffHomes: [v(3, 3.8), v(3, 5.6), v(3, 7.4)],
+  cashierZone: v(-14.4, -6),
+  expansionZone: v(-5.5, 6.4),
+  trash: v(3, -1.5),
 };
-
-// ───────── Desbloqueos (orden y precios) ─────────
-
-export type UnlockKind = 'shelf' | 'plot' | 'processor' | 'cashier' | 'stocker';
-
-export interface UnlockDef {
-  id: string;
-  label: string;
-  icon: string;
-  price: number;
-  x: number;
-  z: number;
-  /** Se muestra cuando todos estos están comprados. */
-  requires: string[];
-  kind: UnlockKind;
-  product?: ItemType;
-  input?: ItemType;
-  output?: ItemType;
-  machine?: 'oven' | 'coop';
-}
-
-export const UNLOCKS: UnlockDef[] = [
-  { id: 'shelf_tomato', label: 'Estantería', icon: '🍅', price: 10, x: -4, z: -5, requires: [], kind: 'shelf', product: 'tomato' },
-  { id: 'plot_tomato', label: 'Huerto', icon: '🍅', price: 10, x: 7, z: -5, requires: ['shelf_tomato'], kind: 'plot', product: 'tomato' },
-  { id: 'plot_tomato2', label: 'Huerto', icon: '🍅', price: 30, x: 7, z: -1, requires: ['plot_tomato'], kind: 'plot', product: 'tomato' },
-  { id: 'cashier', label: 'Cajero', icon: '🙋', price: 60, x: -10.5, z: -3.5, requires: ['plot_tomato'], kind: 'cashier' },
-  { id: 'plot_wheat', label: 'Trigal', icon: '🌾', price: 40, x: 12, z: -5, requires: ['plot_tomato2'], kind: 'plot', product: 'wheat' },
-  { id: 'oven', label: 'Horno', icon: '🔥', price: 60, x: 12, z: 4, requires: ['plot_wheat'], kind: 'processor', input: 'wheat', output: 'bread', machine: 'oven' },
-  { id: 'shelf_bread', label: 'Estantería', icon: '🍞', price: 45, x: -1, z: -5, requires: ['oven'], kind: 'shelf', product: 'bread' },
-  { id: 'coop', label: 'Gallinero', icon: '🐔', price: 70, x: 6.5, z: 4, requires: ['plot_tomato2'], kind: 'processor', input: 'tomato', output: 'egg', machine: 'coop' },
-  { id: 'shelf_egg', label: 'Estantería', icon: '🥚', price: 55, x: -4, z: -1, requires: ['coop'], kind: 'shelf', product: 'egg' },
-  { id: 'stocker', label: 'Reponedor', icon: '🧺', price: 150, x: 0, z: 3, requires: ['shelf_bread'], kind: 'stocker' },
-  { id: 'shelf_tomato2', label: 'Estantería', icon: '🍅', price: 80, x: -1, z: -1, requires: ['shelf_egg'], kind: 'shelf', product: 'tomato' },
-  { id: 'plot_wheat2', label: 'Trigal', icon: '🌾', price: 90, x: 12, z: -1, requires: ['shelf_bread'], kind: 'plot', product: 'wheat' },
-  { id: 'stocker2', label: 'Reponedor', icon: '🧺', price: 250, x: 1.8, z: 3, requires: ['stocker', 'shelf_egg'], kind: 'stocker' },
-];
 
 // ───────── Mejoras ─────────
 
+export type UpgradeId = 'capacity' | 'speed' | 'growth' | 'machines' | 'staff';
+
 export interface UpgradeDef {
-  id: 'capacity' | 'speed' | 'growth' | 'machines' | 'staff';
+  id: UpgradeId;
   name: string;
   icon: string;
   desc: string;
   base: number;
   growth: number;
   max: number;
-  /** Visible si alguno de estos desbloqueos está comprado. */
-  requiresAny?: string[];
+  /** Visible cuando hay algo construido de este tipo. */
+  requires?: 'field' | 'machine' | 'stocker';
 }
 
 export const UPGRADES: UpgradeDef[] = [
   { id: 'capacity', name: 'Mochila', icon: '🎒', desc: '+2 de carga', base: 25, growth: 1.6, max: 10 },
   { id: 'speed', name: 'Zapatillas', icon: '👟', desc: '+8% de velocidad', base: 30, growth: 1.6, max: 8 },
-  { id: 'growth', name: 'Abono', icon: '🌱', desc: 'Cultivos un 12% más rápidos', base: 40, growth: 1.65, max: 8, requiresAny: ['plot_tomato'] },
-  { id: 'machines', name: 'Maquinaria', icon: '⚙️', desc: 'Máquinas un 12% más rápidas', base: 60, growth: 1.7, max: 8, requiresAny: ['oven', 'coop'] },
-  { id: 'staff', name: 'Formación', icon: '🎓', desc: 'Reponedores más rápidos y con más carga', base: 80, growth: 1.7, max: 8, requiresAny: ['stocker'] },
+  { id: 'growth', name: 'Abono', icon: '🌱', desc: 'Cultivos un 12% más rápidos', base: 40, growth: 1.65, max: 8, requires: 'field' },
+  { id: 'machines', name: 'Maquinaria', icon: '⚙️', desc: 'Máquinas un 12% más rápidas', base: 60, growth: 1.7, max: 8, requires: 'machine' },
+  { id: 'staff', name: 'Formación', icon: '🎓', desc: 'Reponedores más rápidos y con más carga', base: 80, growth: 1.7, max: 8, requires: 'stocker' },
 ];
 
-export const upgradeCost = (u: UpgradeDef, lvl: number) => Math.round(u.base * Math.pow(u.growth, lvl));
+export const upgradeCost = (u: UpgradeDef, lvl: number, mult: number) => Math.round((u.base * Math.pow(u.growth, lvl) * mult) / 5) * 5;

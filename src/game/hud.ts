@@ -1,62 +1,57 @@
-import { isMuted, setMuted } from './audio';
-import { UNLOCKS, upgradeCost, UPGRADES } from './config';
+import { UPGRADES } from './config';
 import type { Game } from './game';
+import { openSettings } from './settingsPanel';
+import type { Zone } from './types';
+import { $, isModalOpen, openModal, toast } from './ui';
 import { formatMoney } from './util';
-
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 export class Hud {
   private moneyEl = $('money');
   private moneyValue = $('money-value');
   private hintEl = $('hint');
-  private toastEl = $('toast');
-  private panel = $('panel');
-  private list = $('upgrade-list');
-  private soundBtn = $<HTMLButtonElement>('btn-sound');
+  private actionBtn = $<HTMLButtonElement>('action-btn');
+  private actionIcon = this.actionBtn.querySelector<HTMLElement>('.act-icon')!;
+  private actionLabel = this.actionBtn.querySelector<HTMLElement>('.act-label')!;
+  private upgradesEl: HTMLElement | null = null;
   private shownMoney = -1;
   private hint = '';
-  private toastTimer = 0;
+  private action: Zone | null | undefined;
   private bumpTimer = 0;
 
   constructor(private game: Game) {
-    $('btn-upgrades').addEventListener('click', () => this.openPanel());
-    $('panel-close').addEventListener('click', () => this.closePanel());
-    this.panel.addEventListener('click', (e) => {
-      if (e.target === this.panel) this.closePanel();
-    });
-    this.list.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-id]');
-      if (btn && !btn.disabled) {
-        game.buyUpgrade(btn.dataset.id!);
-        this.renderPanel();
-      }
-    });
-    $('btn-reset').addEventListener('click', () => {
-      if (confirm('¿Seguro que quieres empezar de cero? Se perderá el progreso.')) game.reset();
-    });
-    this.soundBtn.addEventListener('click', () => {
-      setMuted(!isMuted());
-      this.renderSound();
-    });
-    this.renderSound();
-  }
+    $('hud').hidden = false;
+    $('store-name').textContent = `${game.store.emoji} ${game.store.name}`;
+    $('btn-home').addEventListener('click', () => game.goToMenu());
+    $('btn-upgrades').addEventListener('click', () => this.openUpgrades());
+    $('btn-settings').addEventListener('click', () => openSettings());
 
-  get panelOpen() {
-    return !this.panel.hidden;
+    const btn = this.actionBtn;
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      btn.setPointerCapture(e.pointerId);
+      btn.classList.add('pressed');
+      game.actionDown();
+    });
+    const up = () => {
+      btn.classList.remove('pressed');
+      game.actionUp();
+    };
+    btn.addEventListener('pointerup', up);
+    btn.addEventListener('pointercancel', up);
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
   update() {
     const m = Math.floor(this.game.money);
-    if (m !== this.shownMoney) {
-      if (m > this.shownMoney && this.shownMoney >= 0) {
-        this.moneyEl.classList.add('bump');
-        clearTimeout(this.bumpTimer);
-        this.bumpTimer = window.setTimeout(() => this.moneyEl.classList.remove('bump'), 120);
-      }
-      this.shownMoney = m;
-      this.moneyValue.textContent = formatMoney(m);
-      if (this.panelOpen) this.renderPanel();
+    if (m === this.shownMoney) return;
+    if (m > this.shownMoney && this.shownMoney >= 0) {
+      this.moneyEl.classList.add('bump');
+      clearTimeout(this.bumpTimer);
+      this.bumpTimer = window.setTimeout(() => this.moneyEl.classList.remove('bump'), 120);
     }
+    this.shownMoney = m;
+    this.moneyValue.textContent = formatMoney(m);
+    if (this.upgradesEl?.isConnected && isModalOpen()) this.renderUpgrades();
   }
 
   setHint(text: string) {
@@ -66,41 +61,52 @@ export class Hud {
     this.hintEl.classList.toggle('hidden', !text);
   }
 
-  toast(msg: string, ms = 2600) {
-    this.toastEl.textContent = msg;
-    this.toastEl.classList.add('show');
-    clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => this.toastEl.classList.remove('show'), ms);
+  /** Botón de acción del modo manual: visible solo si hay algo que hacer. */
+  setAction(zone: Zone | null) {
+    if (zone === this.action) return;
+    this.action = zone;
+    this.actionBtn.hidden = !zone;
+    if (!zone) {
+      this.actionBtn.classList.remove('pressed');
+      return;
+    }
+    this.actionIcon.textContent = zone.icon;
+    this.actionLabel.textContent = zone.label;
   }
 
-  openPanel() {
-    this.renderPanel();
-    this.panel.hidden = false;
+  toast(msg: string, ms?: number) {
+    toast(msg, ms);
   }
 
-  closePanel() {
-    this.panel.hidden = true;
+  openUpgrades() {
+    const el = document.createElement('div');
+    this.upgradesEl = el;
+    el.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-id]');
+      if (btn && !btn.disabled) {
+        this.game.buyUpgrade(btn.dataset.id!);
+        this.renderUpgrades();
+      }
+    });
+    this.renderUpgrades();
+    openModal('⬆ Mejoras', el, [{ label: 'Cerrar', primary: true }]);
   }
 
-  private renderPanel() {
+  private renderUpgrades() {
     const g = this.game;
-    const rows = UPGRADES.filter((u) => !u.requiresAny || u.requiresAny.some((id) => g.unlocked.has(id))).map((u) => {
+    const el = this.upgradesEl!;
+    const rows = UPGRADES.filter((u) => !u.requires || g.hasBuilt(u.requires)).map((u) => {
       const lvl = g.level(u.id);
       const maxed = lvl >= u.max;
-      const cost = upgradeCost(u, lvl);
-      const label = maxed ? 'MÁX' : `$${formatMoney(cost)}`;
+      const cost = g.upgradePrice(u.id);
       return `<div class="upg">
         <div class="upg-icon">${u.icon}</div>
         <div class="upg-info"><b>${u.name}</b><span class="lvl">Nv ${lvl}/${u.max}</span><small>${u.desc}</small></div>
-        <button type="button" data-id="${u.id}" ${maxed || g.money < cost ? 'disabled' : ''}>${label}</button>
+        <button type="button" data-id="${u.id}" ${maxed || g.money < cost ? 'disabled' : ''}>${maxed ? 'MÁX' : `$${formatMoney(cost)}`}</button>
       </div>`;
     });
-    const bought = UNLOCKS.filter((d) => g.unlocked.has(d.id)).length;
-    rows.push(`<p style="text-align:center;color:#666;margin:12px 0 0">Construcciones: ${bought}/${UNLOCKS.length}</p>`);
-    this.list.innerHTML = rows.join('');
-  }
-
-  private renderSound() {
-    this.soundBtn.textContent = isMuted() ? '🔇' : '🔊';
+    const built = g.unlocks.filter((d) => g.unlocked.has(d.id)).length;
+    rows.push(`<p class="muted center">Construcciones: ${built}/${g.unlocks.length}</p>`);
+    el.innerHTML = rows.join('');
   }
 }

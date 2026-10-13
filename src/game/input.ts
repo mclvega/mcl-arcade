@@ -9,7 +9,10 @@ export class Input {
     private base: HTMLElement,
     private knob: HTMLElement,
   ) {
-    window.addEventListener('keydown', (e) => this.keys.add(e.code));
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') e.preventDefault();
+      this.keys.add(e.code);
+    });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => {
       this.keys.clear();
@@ -49,6 +52,11 @@ export class Input {
     this.joy.id = -1;
     this.joy.dx = this.joy.dy = 0;
     this.base.classList.remove('active');
+  }
+
+  /** Espacio o E: botón de acción en modo manual. */
+  get actionHeld() {
+    return this.keys.has('Space') || this.keys.has('KeyE');
   }
 
   /** x: derecha, y: arriba (en pantalla). Magnitud ≤ 1. */

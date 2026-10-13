@@ -24,7 +24,7 @@
         "owner": "vite",
         "pattern": { "regexp": "^__never_matches__$" },
         "background": {
-          "beginsPattern": "granja-y-tienda@",
+          "beginsPattern": "mcl-arcade@",
           "endsPattern": "localhost"
         }
       }

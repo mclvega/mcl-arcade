@@ -8,6 +8,11 @@ export interface Zone {
   radius: number;
   interval: number;
   timer: number;
+  /** Texto del botón de acción en modo manual. */
+  label: string;
+  icon: string;
+  /** ¿Hay algo que hacer ahora mismo? */
+  canAct: () => boolean;
   act: () => void;
   enabled?: () => boolean;
 }

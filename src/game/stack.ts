@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createItemMesh, ITEM_INFO, type ItemType } from './items';
+import { createItemMesh, itemHeight, type ItemType } from './items';
 import { scene } from './scene';
 import { addTween, type Tween } from './tween';
 
@@ -17,7 +17,7 @@ export type Layout = (index: number, items: Item[], out: THREE.Vector3) => void;
 /** Columna vertical (espalda del jugador). */
 export const columnLayout = (): Layout => (i, items, out) => {
   let y = 0;
-  for (let j = 0; j < i; j++) y += ITEM_INFO[items[j].type].height;
+  for (let j = 0; j < i; j++) y += itemHeight(items[j].type);
   out.set(0, y, 0);
 };
 

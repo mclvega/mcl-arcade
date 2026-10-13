@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { Customer } from '../actors/customer';
-import { CASH_PILE_CAPACITY, CHECKOUT_INTERVAL, PRICES } from '../config';
+import { CASH_PILE_CAPACITY, CHECKOUT_INTERVAL } from '../config';
 import type { Game } from '../game';
+import { PRODUCTS } from '../items';
 import { emojiGroundLabel, ring } from '../labels';
 import { scene } from '../scene';
 import { consumeItem, gridLayout, makeItem, Stack } from '../stack';
@@ -67,6 +68,9 @@ export class Register {
       pos: this.cashPos,
       radius: 1.25,
       interval: 0.035,
+      label: 'Cobrar',
+      icon: '💵',
+      canAct: () => this.cashPile.count > 0,
       act: () => {
         const it = this.cashPile.pop();
         if (!it) return;
@@ -112,7 +116,7 @@ export class Register {
     const it = front.stack.pop();
     if (it) {
       consumeItem(it, this.top, undefined, 0.2);
-      this.addCash(PRICES[it.type] ?? 0);
+      this.addCash(Math.round((PRODUCTS[it.type]?.price ?? 0) * game.store.saleMult));
       game.sfx.cash();
     } else {
       this.queue.shift();

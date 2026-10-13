@@ -55,6 +55,23 @@ export function emojiSign(emoji: string, size = 0.5): THREE.Mesh {
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: texture, transparent: true }));
 }
 
+/** Emoji flotante que siempre mira a la cámara. */
+export function emojiSprite(emoji: string, size = 0.7): THREE.Sprite {
+  const { ctx, texture } = makeCanvasTexture(128, 128);
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.beginPath();
+  ctx.roundRect(6, 6, 116, 116, 30);
+  ctx.fill();
+  ctx.font = `80px ${EMOJI_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, 64, 70);
+  texture.needsUpdate = true;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+  s.scale.set(size, size, 1);
+  return s;
+}
+
 export function ring(radius: number, color = 0xffffff, opacity = 0.7): THREE.Mesh {
   const m = new THREE.Mesh(
     new THREE.RingGeometry(radius - 0.07, radius, 40),

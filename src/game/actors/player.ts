@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BOUNDS } from '../config';
+import { LAYOUT } from '../config';
 import { animateWalk, createCharacter } from '../characters';
 import { columnLayout, Stack } from '../stack';
 import { damp, lerpAngle, resolveCollisions, type Box } from '../util';
@@ -40,8 +40,8 @@ export class Player {
       this.walkT += dt;
     }
     resolveCollisions(this.pos, 0.35, obstacles);
-    this.pos.x = THREE.MathUtils.clamp(this.pos.x, BOUNDS.minX, BOUNDS.maxX);
-    this.pos.z = THREE.MathUtils.clamp(this.pos.z, BOUNDS.minZ, BOUNDS.maxZ);
+    this.pos.x = THREE.MathUtils.clamp(this.pos.x, LAYOUT.bounds.minX, LAYOUT.bounds.maxX);
+    this.pos.z = THREE.MathUtils.clamp(this.pos.z, LAYOUT.bounds.minZ, LAYOUT.bounds.maxZ);
     animateWalk(this.body, this.walkT, moving);
   }
 }
