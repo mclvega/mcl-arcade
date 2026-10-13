@@ -1,6 +1,8 @@
 import { sfx } from './audio';
 import { PRODUCTS } from './items';
-import { clearAll, isStoreUnlocked, loadStore } from './save';
+import { toggleFullscreen } from './fullscreen';
+import { escapeHtml, openNameDialog, openPlayerNameDialog } from './nameDialog';
+import { clearAll, displayName, isStoreUnlocked, loadPlayerName, loadStore, loadStoreName } from './save';
 import { openSettings } from './settingsPanel';
 import { buildUnlocks, STORES, storeProducts, type StoreDef } from './stores';
 import { $, HELP_HTML, openModal } from './ui';
@@ -24,8 +26,10 @@ function renderStores(onPlay: (s: StoreDef) => void) {
       <article class="store-card ${unlocked ? '' : 'locked'}" style="--accent:${store.theme.accent}">
         <div class="store-emoji">${store.emoji}</div>
         <div class="store-body">
-          <h3>${store.name}</h3>
-          <p>${store.tagline}</p>
+          <h3>${escapeHtml(unlocked ? displayName(store) : store.name)}
+            ${unlocked && loadStoreName(store.id) ? `<button type="button" class="rename" data-rename="${store.id}" title="Cambiar nombre" aria-label="Cambiar nombre">✏️</button>` : ''}
+          </h3>
+          <p>${loadStoreName(store.id) ? `${store.name} · ` : ''}${store.tagline}</p>
           <div class="chips" title="${products.map((p) => PRODUCTS[p].name).join(', ')}">${products.map((p) => PRODUCTS[p].emoji).join('')}</div>
           ${
             unlocked
@@ -39,6 +43,12 @@ function renderStores(onPlay: (s: StoreDef) => void) {
   }).join('');
 
   list.onclick = (e) => {
+    const rename = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-rename]');
+    const renamed = STORES.find((s) => s.id === rename?.dataset.rename);
+    if (renamed) {
+      openNameDialog(renamed, () => renderStores(onPlay), false);
+      return;
+    }
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-store]');
     const store = STORES.find((s) => s.id === btn?.dataset.store);
     if (!btn || btn.disabled || !store) return;
@@ -47,11 +57,23 @@ function renderStores(onPlay: (s: StoreDef) => void) {
   };
 }
 
+function renderGreeting() {
+  const name = loadPlayerName();
+  $('greeting').innerHTML = name
+    ? `¡Hola, <b>${escapeHtml(name)}</b>! <button type="button" class="rename" id="rename-player" title="Cambiar tu nombre" aria-label="Cambiar tu nombre">✏️</button>`
+    : '';
+  const btn = document.getElementById('rename-player');
+  if (btn) btn.onclick = () => openPlayerNameDialog(renderGreeting, false);
+}
+
 export function showMenu(onPlay: (s: StoreDef) => void) {
   $('menu').hidden = false;
   renderStores(onPlay);
+  renderGreeting();
+  if (!loadPlayerName()) openPlayerNameDialog(renderGreeting);
   $('menu-settings').onclick = () => openSettings();
   $('menu-help').onclick = () => openModal('❓ Cómo jugar', HELP_HTML);
+  $('menu-fullscreen').onclick = () => toggleFullscreen();
   $('menu-reset').onclick = () =>
     openModal('Borrar progreso', '<p>Se borrarán todas las tiendas, mejoras y dinero. ¿Seguro?</p>', [
       { label: 'Cancelar' },
@@ -61,6 +83,8 @@ export function showMenu(onPlay: (s: StoreDef) => void) {
         onClick: () => {
           clearAll();
           renderStores(onPlay);
+          renderGreeting();
+          openPlayerNameDialog(renderGreeting);
         },
       },
     ]);

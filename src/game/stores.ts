@@ -96,6 +96,8 @@ export interface StoreDef {
   name: string;
   emoji: string;
   tagline: string;
+  /** Ideas de nombre para la tienda. */
+  names: string[];
   /** Multiplica el precio de venta de los productos. */
   saleMult: number;
   /** Multiplica el precio de construcciones y mejoras. */
@@ -114,6 +116,7 @@ export const STORES: StoreDef[] = [
     name: 'La Granja',
     emoji: '🚜',
     tagline: 'Cultiva, ordeña y hornea productos frescos.',
+    names: ['Granja Feliz', 'El Rancho de McL', 'Huerta del Sol', 'La Vaca Contenta', 'Granja Los Pinos'],
     saleMult: 1,
     costMult: 1,
     startSteps: 2,
@@ -132,6 +135,7 @@ export const STORES: StoreDef[] = [
     name: 'Pizzería',
     emoji: '🍕',
     tagline: 'Del huerto al horno: pizzas, calzones y postres.',
+    names: ['Pizza Loca', 'Bella Napoli', 'Pizzería McL', 'Mamma Mia', 'La Masa Mágica'],
     saleMult: 1.3,
     costMult: 1.5,
     startSteps: 2,
@@ -151,6 +155,7 @@ export const STORES: StoreDef[] = [
     name: 'Panadería & Café',
     emoji: '🥐',
     tagline: 'Harina, café y dulces recién hechos.',
+    names: ['Dulce Aroma', 'Café del Horno', 'Pan y Miel', 'La Espiga Dorada', 'Café McL'],
     saleMult: 1.6,
     costMult: 2.2,
     startSteps: 2,
@@ -170,6 +175,7 @@ export const STORES: StoreDef[] = [
     name: 'Supermercado',
     emoji: '🛒',
     tagline: 'De todo un poco: snacks, bebidas y básicos.',
+    names: ['Súper Ahorro', 'Mercado Central', 'McL Market', 'El Carrito Lleno', 'Súper Barrio'],
     saleMult: 2,
     costMult: 3,
     startSteps: 2,
@@ -189,6 +195,7 @@ export const STORES: StoreDef[] = [
     name: 'Autos & Recambios',
     emoji: '🚗',
     tagline: 'Extrae, refina y fabrica piezas… ¡y coches!',
+    names: ['Turbo Garage', 'Motor McL', 'Rueda Veloz', 'Pistón de Oro', 'Taller Nitro'],
     saleMult: 2.5,
     costMult: 4,
     startSteps: 3,

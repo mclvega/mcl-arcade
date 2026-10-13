@@ -7,6 +7,7 @@ const TOGGLES: { key: Toggle; title: string; desc: string }[] = [
   { key: 'sound', title: '🔊 Sonido', desc: 'Efectos al recoger, cobrar y construir' },
   { key: 'shadows', title: '🌗 Sombras', desc: 'Desactívalas si el juego va lento' },
   { key: 'hints', title: '🧭 Pistas', desc: 'Texto de ayuda y flecha guía' },
+  { key: 'fullscreen', title: '⛶ Pantalla completa', desc: 'Activarla al empezar a jugar' },
 ];
 
 function render(el: HTMLElement) {

@@ -619,6 +619,66 @@ button {
   transform: translateX(20px);
 }
 
+/* ───────── Nombres y pantalla completa ───────── */
+
+.greeting {
+  margin: 12px 0 0;
+  font-size: 18px;
+}
+
+.greeting:empty {
+  display: none;
+}
+
+.rename {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.greeting .rename {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.name-row {
+  display: flex;
+  gap: 8px;
+}
+
+.name-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 2px solid #ddd;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.name-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.name-row .dice {
+  flex: none;
+  width: 52px;
+  font-size: 22px;
+  box-shadow: none;
+  background: #f1f1f1;
+}
+
+.no-fullscreen .fs-btn {
+  display: none;
+}
+
 /* ───────── Toast ───────── */
 
 #toast {

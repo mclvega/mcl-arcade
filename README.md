@@ -27,12 +27,16 @@ Cada tienda se desbloquea comprando la zona **«Nueva tienda»** al final de la 
 | Comprar | Párate sobre un recuadro con precio hasta llenarlo |
 | Tirar | Lleva lo que no necesites al cubo de basura 🗑️ |
 
+**Nombres:** al abrir el juego por primera vez se pregunta tu nombre (aparece sobre tu personaje). La primera vez que entras en una tienda le pones nombre; sale en el cartel de la tienda y en el menú. Ambos se pueden cambiar desde el menú con ✏️.
+
+**Pantalla completa:** se activa al pulsar *Jugar* y se puede quitar o poner con el botón ⛶. El iPhone no permite pantalla completa en páginas web; ahí se consigue con *Compartir → Añadir a pantalla de inicio* (la web incluye un `manifest` para ello).
+
 **⚙️ Configuración** (desde el menú o en partida):
 
 - **Modo de interacción**: *Automático* (todo se hace al acercarte) o *Con botón*. En el modo con botón aparece un botón de acción abajo a la derecha con la acción disponible (Recoger, Soltar, Cobrar, Comprar o Tirar). También funciona con `Espacio` o `E`.
-- Sonido, sombras (desactívalas si va lento) y pistas con flecha guía.
+- Sonido, sombras (desactívalas si va lento), pistas con flecha guía y pantalla completa automática.
 
-En **⬆ Mejoras** compras mochila, velocidad, abono, maquinaria y formación del personal. Puedes contratar un **cajero** y **reponedores** que abastecen las estanterías y las máquinas. La partida se guarda sola en el navegador (`localStorage`).
+En **⬆ Mejoras** compras mochila, velocidad, abono, maquinaria y formación del personal. Puedes contratar un **cajero** y **reponedores** que abastecen las estanterías y las máquinas. La partida se guarda sola en el `localStorage` del navegador (no en cookies ni en un servidor). Eso significa que el progreso queda en ese dispositivo y en ese navegador: no pasa de un móvil a un PC, y se pierde si se borran los datos del sitio.
 
 ## Desarrollo local
 
@@ -78,7 +82,7 @@ src/
     items.ts              DATOS: catálogo de productos y sus mallas low-poly
     config.ts             ritmo, capacidades, mapa común y mejoras
     game.ts               orquestador: bucle, zonas, desbloqueos, pistas, cámara, guardado
-    menu.ts · hud.ts · settingsPanel.ts · settings.ts · ui.ts
+    menu.ts · hud.ts · nameDialog.ts · settingsPanel.ts · settings.ts · fullscreen.ts · ui.ts
     stack.ts              pilas de ítems y animación de transferencia en arco
     world.ts · props.ts   suelo, luces, paredes y decorado según el tema de la tienda
     input.ts · audio.ts · save.ts · labels.ts · tween.ts · util.ts

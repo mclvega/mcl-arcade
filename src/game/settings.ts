@@ -6,9 +6,11 @@ export interface Settings {
   sound: boolean;
   shadows: boolean;
   hints: boolean;
+  /** Entrar en pantalla completa al jugar. */
+  fullscreen: boolean;
 }
 
-const DEFAULTS: Settings = { mode: 'auto', sound: true, shadows: true, hints: true };
+const DEFAULTS: Settings = { mode: 'auto', sound: true, shadows: true, hints: true, fullscreen: true };
 
 function load(): Settings {
   try {
@@ -34,6 +36,7 @@ export function updateSettings(patch: Partial<Settings>) {
   listeners.forEach((fn) => fn());
 }
 
-export function onSettingsChange(fn: () => void) {
+export function onSettingsChange(fn: () => void): () => void {
   listeners.add(fn);
+  return () => listeners.delete(fn);
 }

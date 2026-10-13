@@ -1,4 +1,4 @@
-import { STORES } from './stores';
+import { STORES, type StoreDef } from './stores';
 
 const PREFIX = 'mcl-arcade:v1';
 
@@ -32,6 +32,14 @@ function write(key: string, data: unknown) {
 
 export const loadStore = (id: string) => read<StoreSave>(`${PREFIX}:store:${id}`);
 export const saveStore = (id: string, data: StoreSave) => write(`${PREFIX}:store:${id}`, data);
+
+/** Nombre que el jugador le puso a la tienda. */
+export const loadStoreName = (id: string) => read<string>(`${PREFIX}:name:${id}`);
+export const saveStoreName = (id: string, name: string) => write(`${PREFIX}:name:${id}`, name);
+export const displayName = (store: StoreDef) => loadStoreName(store.id) || store.name;
+
+export const loadPlayerName = () => read<string>(`${PREFIX}:player`);
+export const savePlayerName = (name: string) => write(`${PREFIX}:player`, name);
 
 function loadMeta(): MetaSave {
   return read<MetaSave>(`${PREFIX}:meta`) ?? { unlockedStores: [] };

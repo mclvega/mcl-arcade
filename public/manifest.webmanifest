@@ -1,0 +1,13 @@
+{
+  "name": "McL Arcade",
+  "short_name": "McL Arcade",
+  "description": "Cultiva, fabrica y vende en tus propias tiendas.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#1b5e20",
+  "theme_color": "#1b5e20",
+  "lang": "es",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

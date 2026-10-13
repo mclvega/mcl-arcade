@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LAYOUT } from '../config';
 import { animateWalk, createCharacter } from '../characters';
+import { nameTag } from '../labels';
 import { columnLayout, Stack } from '../stack';
 import { damp, lerpAngle, resolveCollisions, type Box } from '../util';
 
@@ -15,7 +16,7 @@ export class Player {
   private walkT = 0;
   private dir = new THREE.Vector3();
 
-  constructor(capacity: number, start: THREE.Vector3) {
+  constructor(capacity: number, start: THREE.Vector3, name?: string) {
     const c = createCharacter(0x1e88e5, 0xffffff);
     this.group = c.group;
     this.body = c.body;
@@ -24,6 +25,11 @@ export class Player {
     anchor.position.set(0, 0.45, -0.45);
     this.body.add(anchor);
     this.stack = new Stack(anchor, capacity, columnLayout());
+    if (name) {
+      const tag = nameTag(name);
+      tag.position.y = 2.0;
+      this.group.add(tag);
+    }
   }
 
   get pos() {

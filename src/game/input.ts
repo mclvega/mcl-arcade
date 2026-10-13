@@ -8,16 +8,18 @@ export class Input {
     target: HTMLElement,
     private base: HTMLElement,
     private knob: HTMLElement,
+    signal: AbortSignal,
   ) {
+    const opts = { signal };
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Space') e.preventDefault();
       this.keys.add(e.code);
-    });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    }, opts);
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code), opts);
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.release();
-    });
+    }, opts);
 
     target.addEventListener('pointerdown', (e) => {
       if (this.joy.id !== -1) return;

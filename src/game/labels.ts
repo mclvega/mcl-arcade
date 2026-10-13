@@ -55,6 +55,26 @@ export function emojiSign(emoji: string, size = 0.5): THREE.Mesh {
   return new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({ map: texture, transparent: true }));
 }
 
+/** Etiqueta con texto que siempre mira a la cámara (nombre del jugador). */
+export function nameTag(text: string): THREE.Sprite {
+  const { ctx, canvas, texture } = makeCanvasTexture(256, 64);
+  ctx.font = `bold 34px ${UI_FONT}`;
+  const w = Math.min(248, ctx.measureText(text).width + 32);
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.beginPath();
+  ctx.roundRect((canvas.width - w) / 2, 6, w, 52, 26);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 128, 34, 232);
+  texture.needsUpdate = true;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+  s.scale.set(1.6, 0.4, 1);
+  s.renderOrder = 11;
+  return s;
+}
+
 /** Emoji flotante que siempre mira a la cámara. */
 export function emojiSprite(emoji: string, size = 0.7): THREE.Sprite {
   const { ctx, texture } = makeCanvasTexture(128, 128);

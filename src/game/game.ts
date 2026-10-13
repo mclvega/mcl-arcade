@@ -7,7 +7,7 @@ import { LAYOUT, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES } from './config';
 import { Hud } from './hud';
 import { Input } from './input';
 import { itemName, type ItemType } from './items';
-import { loadStore, saveStore, unlockStore } from './save';
+import { displayName, loadPlayerName, loadStore, saveStore, unlockStore } from './save';
 import { scene } from './scene';
 import { onSettingsChange, settings } from './settings';
 import { BuyZone } from './stations/buyzone';
@@ -17,13 +17,19 @@ import { Register } from './stations/register';
 import { Shelf } from './stations/shelf';
 import { TrashBin } from './stations/trash';
 import { buildUnlocks, MACHINES, startMoney, STORE_MAP, type StoreDef, type UnlockDef, type UnlockKind } from './stores';
-import { popIn, updateTweens } from './tween';
+import { clearTweens, popIn, updateTweens } from './tween';
 import type { Sink, Source, Zone } from './types';
 import { isModalOpen, openModal } from './ui';
 import { damp, distXZ, randInt, shuffle, type Box } from './util';
 import { buildWorld } from './world';
 
 const CAM_OFFSET = new THREE.Vector3(12, 16, 12);
+
+/** Navegación sin recargar la página (así no se pierde la pantalla completa). */
+export interface Nav {
+  menu(): void;
+  store(id: string): void;
+}
 
 export class Game {
   readonly sfx = sfx;
@@ -43,6 +49,7 @@ export class Game {
   readonly register: Register;
   readonly input: Input;
   readonly hud: Hud;
+  readonly name: string;
   money: number;
   cashierHired = false;
 
@@ -61,11 +68,15 @@ export class Game {
   private actionHeld = false;
   private actionPulse = false;
   private actionZone: Zone | null = null;
+  private abort = new AbortController();
+  private unsubSettings: () => void;
 
   constructor(
     container: HTMLElement,
     readonly store: StoreDef,
+    private nav: Nav,
   ) {
+    this.name = displayName(store);
     this.unlocks = buildUnlocks(store);
     this.unlockMap = new Map(this.unlocks.map((u) => [u.id, u]));
     this.money = startMoney(store, this.unlocks);
@@ -76,9 +87,9 @@ export class Game {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
 
-    buildWorld(this, store.theme, store.name);
-    this.input = new Input(this.renderer.domElement, document.getElementById('joystick')!, document.getElementById('joy-knob')!);
-    this.player = new Player(STATS.playerCapacity(0), LAYOUT.playerStart);
+    buildWorld(this, store.theme, this.name);
+    this.input = new Input(this.renderer.domElement, document.getElementById('joystick')!, document.getElementById('joy-knob')!, this.abort.signal);
+    this.player = new Player(STATS.playerCapacity(0), LAYOUT.playerStart, loadPlayerName() ?? undefined);
     scene.add(this.player.group);
     this.register = new Register(this, LAYOUT.register);
     new TrashBin(this, LAYOUT.trash);
@@ -96,15 +107,20 @@ export class Game {
     this.loadGame();
     this.camTarget.copy(this.player.pos);
 
+    const opts = { signal: this.abort.signal };
     const unlockAudio = () => initAudio();
-    window.addEventListener('pointerdown', unlockAudio);
-    window.addEventListener('keydown', unlockAudio);
-    window.addEventListener('resize', () => this.resize());
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.save();
-    });
-    window.addEventListener('pagehide', () => this.save());
-    onSettingsChange(() => this.applySettings());
+    window.addEventListener('pointerdown', unlockAudio, opts);
+    window.addEventListener('keydown', unlockAudio, opts);
+    window.addEventListener('resize', () => this.resize(), opts);
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (document.hidden) this.save();
+      },
+      opts,
+    );
+    window.addEventListener('pagehide', () => this.save(), opts);
+    this.unsubSettings = onSettingsChange(() => this.applySettings());
     this.resize();
 
     if (this.unlocked.size === 0) {
@@ -115,6 +131,28 @@ export class Game {
 
   start() {
     this.renderer.setAnimationLoop(() => this.frame());
+  }
+
+  /** Guarda y libera todo (escena, listeners, GPU) para volver al menú o cambiar de tienda. */
+  dispose() {
+    this.save();
+    this.renderer.setAnimationLoop(null);
+    this.abort.abort();
+    this.unsubSettings();
+    this.hud.dispose();
+    clearTweens();
+    scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      m.geometry?.dispose();
+      const mats = m.material ? (Array.isArray(m.material) ? m.material : [m.material]) : [];
+      for (const mat of mats) {
+        (mat as THREE.MeshBasicMaterial).map?.dispose();
+        mat.dispose();
+      }
+    });
+    scene.clear();
+    this.renderer.dispose();
+    this.renderer.domElement.remove();
   }
 
   // ───────── Estadísticas y mejoras ─────────
@@ -276,13 +314,11 @@ export class Game {
   }
 
   goToMenu() {
-    this.save();
-    location.href = location.pathname;
+    this.nav.menu();
   }
 
   goToStore(id: string) {
-    this.save();
-    location.href = `${location.pathname}?tienda=${id}`;
+    this.nav.store(id);
   }
 
   // ───────── Consultas para la IA ─────────

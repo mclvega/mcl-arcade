@@ -1,5 +1,6 @@
 import { UPGRADES } from './config';
 import type { Game } from './game';
+import { toggleFullscreen } from './fullscreen';
 import { openSettings } from './settingsPanel';
 import type { Zone } from './types';
 import { $, isModalOpen, openModal, toast } from './ui';
@@ -17,13 +18,16 @@ export class Hud {
   private hint = '';
   private action: Zone | null | undefined;
   private bumpTimer = 0;
+  private abort = new AbortController();
 
   constructor(private game: Game) {
+    const opts = { signal: this.abort.signal };
     $('hud').hidden = false;
-    $('store-name').textContent = `${game.store.emoji} ${game.store.name}`;
-    $('btn-home').addEventListener('click', () => game.goToMenu());
-    $('btn-upgrades').addEventListener('click', () => this.openUpgrades());
-    $('btn-settings').addEventListener('click', () => openSettings());
+    $('store-name').textContent = `${game.store.emoji} ${game.name}`;
+    $('btn-home').addEventListener('click', () => game.goToMenu(), opts);
+    $('btn-upgrades').addEventListener('click', () => this.openUpgrades(), opts);
+    $('btn-settings').addEventListener('click', () => openSettings(), opts);
+    $('btn-fullscreen').addEventListener('click', () => toggleFullscreen(), opts);
 
     const btn = this.actionBtn;
     btn.addEventListener('pointerdown', (e) => {
@@ -31,14 +35,21 @@ export class Hud {
       btn.setPointerCapture(e.pointerId);
       btn.classList.add('pressed');
       game.actionDown();
-    });
+    }, opts);
     const up = () => {
       btn.classList.remove('pressed');
       game.actionUp();
     };
-    btn.addEventListener('pointerup', up);
-    btn.addEventListener('pointercancel', up);
-    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    btn.addEventListener('pointerup', up, opts);
+    btn.addEventListener('pointercancel', up, opts);
+    btn.addEventListener('contextmenu', (e) => e.preventDefault(), opts);
+  }
+
+  dispose() {
+    this.abort.abort();
+    $('hud').hidden = true;
+    this.actionBtn.hidden = true;
+    this.hintEl.classList.add('hidden');
   }
 
   update() {

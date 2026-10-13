@@ -35,6 +35,11 @@ export function updateTweens(dt: number) {
   }
 }
 
+/** Al salir de una tienda. */
+export function clearTweens() {
+  list.length = 0;
+}
+
 export function easeOutBack(k: number): number {
   const c1 = 1.70158;
   const c3 = c1 + 1;
