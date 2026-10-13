@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#8bc34a" />
+    <meta name="description" content="Cultiva, cosecha y vende en tu propia tienda de granja. Juego idle arcade gratis en el navegador." />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>Granja &amp; Tienda</title>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="hud">
+      <div id="money"><span class="coin">$</span><span id="money-value">0</span></div>
+      <div class="hud-buttons">
+        <button id="btn-upgrades" type="button">⬆ Mejoras</button>
+        <button id="btn-sound" type="button" aria-label="Sonido">🔊</button>
+      </div>
+      <div id="hint" class="hidden"></div>
+    </div>
+
+    <div id="joystick"><div id="joy-knob"></div></div>
+
+    <div id="panel" hidden>
+      <div class="panel-card">
+        <div class="panel-head">
+          <h2>Mejoras</h2>
+          <button id="panel-close" type="button" aria-label="Cerrar">✕</button>
+        </div>
+        <div id="upgrade-list"></div>
+        <div class="panel-foot">
+          <button id="btn-reset" type="button" class="danger">Reiniciar partida</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
