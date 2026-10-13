@@ -9,7 +9,7 @@ import { CARE, CARRY, DIFFICULTIES, EVENTS, SPECIAL, THIEF, type AreaId, LAYOUT,
 import { Hud } from './hud';
 import { Input } from './input';
 import { itemEmoji, itemName, PRODUCTS, type ItemType } from './items';
-import { clearStoreProgress, displayName, loadDifficulty, loadPlayerName, loadStore, saveStore, unlockStore, type StoreStats } from './save';
+import { clearStoreProgress, displayName, loadDifficulty, loadLook, loadPlayerName, loadStore, saveStore, unlockStore, type StoreStats } from './save';
 import { scene } from './scene';
 import { consumeItem } from './stack';
 import { onSettingsChange, settings } from './settings';
@@ -117,7 +117,7 @@ export class Game {
     this.applyShadowSize();
     // El joystick escucha al contenedor: así el canvas se puede cambiar al variar la calidad.
     this.input = new Input(container, document.getElementById('joystick')!, document.getElementById('joy-knob')!, this.abort.signal);
-    this.player = new Player(STATS.playerCapacity(0), LAYOUT.playerStart, loadPlayerName() ?? undefined);
+    this.player = new Player(STATS.playerCapacity(0), LAYOUT.playerStart, loadLook(), loadPlayerName() ?? undefined);
     scene.add(this.player.group);
     this.register = new Register(this, LAYOUT.register);
     new TrashBin(this, LAYOUT.trash);

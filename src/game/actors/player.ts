@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { LAYOUT } from '../config';
-import { animateWalk, createCharacter } from '../characters';
+import { animateWalk, createAvatar, type Look } from '../characters';
 import { nameTag } from '../labels';
 import { columnLayout, Stack } from '../stack';
 import { damp, lerpAngle, resolveCollisions, type Box } from '../util';
@@ -16,8 +16,8 @@ export class Player {
   private walkT = 0;
   private dir = new THREE.Vector3();
 
-  constructor(capacity: number, start: THREE.Vector3, name?: string) {
-    const c = createCharacter(0x1e88e5, 0xffffff);
+  constructor(capacity: number, start: THREE.Vector3, look: Look, name?: string) {
+    const c = createAvatar(look);
     this.group = c.group;
     this.body = c.body;
     this.group.position.copy(start);

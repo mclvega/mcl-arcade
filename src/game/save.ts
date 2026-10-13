@@ -1,3 +1,4 @@
+import { DEFAULT_LOOK, type Look } from './characters';
 import type { DifficultyId } from './config';
 import { STORES, type StoreDef } from './stores';
 
@@ -61,6 +62,10 @@ export function clearStoreProgress(id: string) {
     /* sin almacenamiento */
   }
 }
+
+/** Apariencia del personaje del jugador. */
+export const loadLook = (): Look => ({ ...DEFAULT_LOOK, ...(read<Partial<Look>>(`${PREFIX}:look`) ?? {}) });
+export const saveLook = (look: Look) => write(`${PREFIX}:look`, look);
 
 export const loadPlayerName = () => read<string>(`${PREFIX}:player`);
 export const savePlayerName = (name: string) => write(`${PREFIX}:player`, name);

@@ -1,6 +1,7 @@
 import { sfx } from './audio';
 import { PRODUCTS } from './items';
 import { toggleFullscreen } from './fullscreen';
+import { openCustomizer } from './customize';
 import { escapeHtml, openNameDialog, openPlayerNameDialog } from './nameDialog';
 import { DIFFICULTIES } from './config';
 import { clearAll, displayName, isStoreUnlocked, loadDifficulty, loadPlayerName, loadStore, loadStoreName } from './save';
@@ -63,19 +64,23 @@ function renderStores(onPlay: (s: StoreDef) => void) {
 function renderGreeting() {
   const name = loadPlayerName();
   $('greeting').innerHTML = name
-    ? `¡Hola, <b>${escapeHtml(name)}</b>! <button type="button" class="rename" id="rename-player" title="Cambiar tu nombre" aria-label="Cambiar tu nombre">✏️</button>`
+    ? `¡Hola, <b>${escapeHtml(name)}</b>! <button type="button" class="rename" id="rename-player" title="Cambiar tu nombre" aria-label="Cambiar tu nombre">✏️</button>
+       <button type="button" class="rename" id="customize-player" title="Personalizar personaje">👕 Personaje</button>`
     : '';
   const btn = document.getElementById('rename-player');
   if (btn) btn.onclick = () => openPlayerNameDialog(renderGreeting, false);
+  const look = document.getElementById('customize-player');
+  if (look) look.onclick = () => openCustomizer();
 }
 
 export function showMenu(onPlay: (s: StoreDef) => void) {
   $('menu').hidden = false;
   renderStores(onPlay);
   renderGreeting();
-  if (!loadPlayerName()) openPlayerNameDialog(renderGreeting);
+  if (!loadPlayerName()) openPlayerNameDialog(() => openCustomizer(renderGreeting));
   $('menu-settings').onclick = () => openSettings();
   $('menu-help').onclick = () => openModal('❓ Cómo jugar', HELP_HTML);
+  $('menu-customize').onclick = () => openCustomizer();
   $('menu-fullscreen').onclick = () => toggleFullscreen();
   $('menu-reset').onclick = () =>
     openModal('Borrar progreso', '<p>Se borrarán todas las tiendas, mejoras y dinero. ¿Seguro?</p>', [

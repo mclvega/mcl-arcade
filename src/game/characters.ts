@@ -10,40 +10,258 @@ const mat = (color: number) => {
   return m;
 };
 
-const TORSO = new THREE.CapsuleGeometry(0.3, 0.42, 4, 12);
-const HEAD = new THREE.SphereGeometry(0.24, 16, 12);
-const EYE = new THREE.SphereGeometry(0.035, 8, 6);
-const CAP = new THREE.CylinderGeometry(0.25, 0.25, 0.12, 16);
-const VISOR = new THREE.BoxGeometry(0.3, 0.03, 0.18);
+// ───────── Apariencia ─────────
+
+export type Gender = 'boy' | 'girl';
+export type HairStyle = 'short' | 'long' | 'ponytail' | 'curly' | 'mohawk' | 'bun' | 'bald';
+export type Bottom = 'pants' | 'shorts' | 'skirt';
+export type HatStyle = 'none' | 'cap' | 'straw' | 'chef' | 'beanie' | 'helmet' | 'crown';
+export type Accessory = 'none' | 'glasses' | 'sunglasses' | 'mustache' | 'bowtie';
+
+export interface Look {
+  gender: Gender;
+  skin: number;
+  hair: HairStyle;
+  hairColor: number;
+  shirt: number;
+  bottom: Bottom;
+  bottomColor: number;
+  hat: HatStyle;
+  hatColor: number;
+  accessory: Accessory;
+}
+
+export const LOOK_OPTIONS = {
+  gender: [
+    { id: 'boy', label: '👦 Chico' },
+    { id: 'girl', label: '👧 Chica' },
+  ],
+  skin: [0xffe0c4, 0xf5c9a0, 0xe0ac69, 0xc68642, 0x8d5524, 0x5c3a21],
+  hair: [
+    { id: 'short', label: 'Corto' },
+    { id: 'long', label: 'Largo' },
+    { id: 'ponytail', label: 'Coleta' },
+    { id: 'bun', label: 'Moño' },
+    { id: 'curly', label: 'Rizado' },
+    { id: 'mohawk', label: 'Cresta' },
+    { id: 'bald', label: 'Rapado' },
+  ],
+  hairColor: [0x2b1d14, 0x5d4037, 0xa1887f, 0xf6d36b, 0xd84315, 0x9e9e9e, 0x1e88e5, 0xec407a, 0x43a047],
+  shirt: [0x1e88e5, 0xe53935, 0x43a047, 0xfdd835, 0x8e24aa, 0xff7043, 0x00897b, 0xffffff, 0x37474f, 0xf06292],
+  bottom: [
+    { id: 'pants', label: 'Pantalón' },
+    { id: 'shorts', label: 'Pantalón corto' },
+    { id: 'skirt', label: 'Falda' },
+  ],
+  bottomColor: [0x283593, 0x37474f, 0x6d4c41, 0x212121, 0xc62828, 0xf5f5f5],
+  hat: [
+    { id: 'none', label: 'Ninguno' },
+    { id: 'cap', label: 'Gorra' },
+    { id: 'straw', label: 'Sombrero' },
+    { id: 'chef', label: 'Chef' },
+    { id: 'beanie', label: 'Gorro de lana' },
+    { id: 'helmet', label: 'Casco' },
+    { id: 'crown', label: 'Corona' },
+  ],
+  hatColor: [0xe53935, 0x1e88e5, 0x43a047, 0xffffff, 0x212121, 0xffb300],
+  accessory: [
+    { id: 'none', label: 'Ninguno' },
+    { id: 'glasses', label: 'Gafas' },
+    { id: 'sunglasses', label: 'Gafas de sol' },
+    { id: 'mustache', label: 'Bigote' },
+    { id: 'bowtie', label: 'Pajarita' },
+  ],
+} as const;
+
+export const DEFAULT_LOOK: Look = {
+  gender: 'boy',
+  skin: 0xf5c9a0,
+  hair: 'short',
+  hairColor: 0x5d4037,
+  shirt: 0x1e88e5,
+  bottom: 'pants',
+  bottomColor: 0x283593,
+  hat: 'cap',
+  hatColor: 0xffffff,
+  accessory: 'none',
+};
+
+const pick = <T>(arr: readonly T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+export function randomLook(): Look {
+  const gender = pick(['boy', 'girl'] as const);
+  return {
+    gender,
+    skin: pick(LOOK_OPTIONS.skin),
+    hair: pick(gender === 'girl' ? (['long', 'ponytail', 'bun', 'curly', 'short'] as const) : (['short', 'curly', 'mohawk', 'bald', 'short'] as const)),
+    hairColor: pick(LOOK_OPTIONS.hairColor.slice(0, 6)),
+    shirt: pick(LOOK_OPTIONS.shirt),
+    bottom: gender === 'girl' ? pick(['skirt', 'pants', 'shorts'] as const) : pick(['pants', 'shorts'] as const),
+    bottomColor: pick(LOOK_OPTIONS.bottomColor),
+    hat: Math.random() < 0.25 ? pick(['cap', 'straw', 'beanie'] as const) : 'none',
+    hatColor: pick(LOOK_OPTIONS.hatColor),
+    accessory: Math.random() < 0.3 ? pick(['glasses', 'sunglasses', 'mustache', 'bowtie'] as const) : 'none',
+  };
+}
+
+// ───────── Construcción ─────────
 
 export interface Character {
   group: THREE.Group;
   body: THREE.Group;
 }
 
-/** Personaje low-poly que mira hacia +z. */
-export function createCharacter(color: number, hat?: number): Character {
+const HEAD_Y = 1.28;
+const HEAD_R = 0.24;
+
+function m(geo: THREE.BufferGeometry, color: number, x = 0, y = 0, z = 0): THREE.Mesh {
+  const mesh = new THREE.Mesh(geo, mat(color));
+  mesh.position.set(x, y, z);
+  return mesh;
+}
+
+function addHair(body: THREE.Group, look: Look) {
+  const c = look.hairColor;
+  const cap = () => {
+    const h = m(new THREE.SphereGeometry(HEAD_R + 0.025, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), c, 0, HEAD_Y + 0.01, -0.01);
+    body.add(h);
+  };
+  switch (look.hair) {
+    case 'short':
+      cap();
+      body.add(m(new THREE.BoxGeometry(0.3, 0.07, 0.08), c, 0, HEAD_Y + 0.17, 0.17));
+      break;
+    case 'long':
+      cap();
+      body.add(m(new THREE.BoxGeometry(0.46, 0.5, 0.14), c, 0, HEAD_Y - 0.12, -0.16));
+      break;
+    case 'ponytail':
+      cap();
+      body.add(m(new THREE.SphereGeometry(0.09, 10, 8), c, 0, HEAD_Y + 0.08, -0.28));
+      body.add(m(new THREE.CylinderGeometry(0.06, 0.03, 0.32, 8), c, 0, HEAD_Y - 0.12, -0.33));
+      break;
+    case 'bun':
+      cap();
+      body.add(m(new THREE.SphereGeometry(0.11, 12, 8), c, 0, HEAD_Y + 0.27, -0.06));
+      break;
+    case 'curly':
+      body.add(m(new THREE.IcosahedronGeometry(0.31, 1), c, 0, HEAD_Y + 0.08, -0.05));
+      break;
+    case 'mohawk':
+      body.add(m(new THREE.BoxGeometry(0.07, 0.18, 0.4), c, 0, HEAD_Y + 0.25, -0.02));
+      break;
+    case 'bald':
+      break;
+  }
+}
+
+function addHat(body: THREE.Group, look: Look) {
+  const c = look.hatColor;
+  const top = HEAD_Y + 0.17;
+  switch (look.hat) {
+    case 'cap':
+      body.add(m(new THREE.CylinderGeometry(0.25, 0.25, 0.12, 16), c, 0, top + 0.02, 0));
+      body.add(m(new THREE.BoxGeometry(0.3, 0.03, 0.18), c, 0, top - 0.02, 0.24));
+      break;
+    case 'straw':
+      body.add(m(new THREE.CylinderGeometry(0.42, 0.42, 0.03, 20), 0xe6c35c, 0, top, 0));
+      body.add(m(new THREE.CylinderGeometry(0.2, 0.24, 0.16, 16), 0xe6c35c, 0, top + 0.08, 0));
+      body.add(m(new THREE.CylinderGeometry(0.245, 0.245, 0.04, 16), c, 0, top + 0.03, 0));
+      break;
+    case 'chef':
+      body.add(m(new THREE.CylinderGeometry(0.22, 0.22, 0.2, 16), 0xffffff, 0, top + 0.08, 0));
+      body.add(m(new THREE.SphereGeometry(0.26, 14, 10), 0xffffff, 0, top + 0.26, 0));
+      break;
+    case 'beanie':
+      body.add(m(new THREE.SphereGeometry(HEAD_R + 0.04, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), c, 0, HEAD_Y + 0.03, 0));
+      body.add(m(new THREE.SphereGeometry(0.06, 8, 6), 0xffffff, 0, HEAD_Y + 0.31, 0));
+      break;
+    case 'helmet':
+      body.add(m(new THREE.SphereGeometry(HEAD_R + 0.05, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), 0xfdd835, 0, HEAD_Y + 0.03, 0));
+      body.add(m(new THREE.BoxGeometry(0.34, 0.03, 0.14), 0xfdd835, 0, HEAD_Y + 0.04, 0.24));
+      break;
+    case 'crown': {
+      const gold = 0xffc107;
+      body.add(m(new THREE.CylinderGeometry(0.2, 0.2, 0.1, 12, 1, true), gold, 0, top + 0.06, 0));
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        body.add(m(new THREE.ConeGeometry(0.045, 0.12, 4), gold, Math.cos(a) * 0.18, top + 0.16, Math.sin(a) * 0.18));
+      }
+      break;
+    }
+    case 'none':
+      break;
+  }
+}
+
+function addAccessory(body: THREE.Group, look: Look) {
+  const eyeY = HEAD_Y + 0.04;
+  switch (look.accessory) {
+    case 'glasses':
+      for (const x of [-0.09, 0.09]) {
+        const r = m(new THREE.TorusGeometry(0.055, 0.012, 6, 14), 0x212121, x, eyeY, 0.225);
+        body.add(r);
+      }
+      body.add(m(new THREE.BoxGeometry(0.06, 0.015, 0.015), 0x212121, 0, eyeY, 0.23));
+      break;
+    case 'sunglasses':
+      body.add(m(new THREE.BoxGeometry(0.34, 0.08, 0.03), 0x111111, 0, eyeY, 0.225));
+      break;
+    case 'mustache':
+      body.add(m(new THREE.BoxGeometry(0.16, 0.04, 0.04), look.hairColor, 0, HEAD_Y - 0.06, 0.225));
+      break;
+    case 'bowtie':
+      for (const x of [-0.06, 0.06]) {
+        const cone = m(new THREE.ConeGeometry(0.05, 0.09, 4), 0xc62828, x, 1.0, 0.27);
+        cone.rotation.z = x < 0 ? -Math.PI / 2 : Math.PI / 2;
+        body.add(cone);
+      }
+      break;
+    case 'none':
+      break;
+  }
+}
+
+/** Personaje low-poly que mira hacia +z, construido a partir de su apariencia. */
+export function createAvatar(look: Look): Character {
   const group = new THREE.Group();
   const body = new THREE.Group();
   group.add(body);
+  const girl = look.gender === 'girl';
+  const torsoR = girl ? 0.27 : 0.31;
 
-  const torso = new THREE.Mesh(TORSO, mat(color));
-  torso.position.y = 0.55;
-  const head = new THREE.Mesh(HEAD, mat(0xffd5b0));
-  head.position.y = 1.28;
-  const eyeL = new THREE.Mesh(EYE, mat(0x222222));
-  eyeL.position.set(-0.09, 1.32, 0.21);
-  const eyeR = eyeL.clone();
-  eyeR.position.x = 0.09;
-  body.add(torso, head, eyeL, eyeR);
-
-  if (hat !== undefined) {
-    const cap = new THREE.Mesh(CAP, mat(hat));
-    cap.position.y = 1.47;
-    const visor = new THREE.Mesh(VISOR, mat(hat));
-    visor.position.set(0, 1.43, 0.24);
-    body.add(cap, visor);
+  // Torso (camiseta) y parte de abajo
+  body.add(m(new THREE.CapsuleGeometry(torsoR, 0.42, 4, 12), look.shirt, 0, 0.58, 0));
+  if (look.bottom === 'skirt') {
+    body.add(m(new THREE.CylinderGeometry(torsoR + 0.01, torsoR + 0.15, 0.34, 14), look.bottomColor, 0, 0.3, 0));
+  } else {
+    const h = look.bottom === 'shorts' ? 0.24 : 0.38;
+    body.add(m(new THREE.CylinderGeometry(torsoR + 0.012, torsoR + 0.02, h, 14), look.bottomColor, 0, 0.42 - h / 2, 0));
   }
+  if (look.bottom !== 'pants') for (const x of [-0.12, 0.12]) body.add(m(new THREE.CylinderGeometry(0.07, 0.07, 0.16, 8), look.skin, x, 0.1, 0.02));
+  for (const x of [-0.12, 0.12]) body.add(m(new THREE.BoxGeometry(0.13, 0.07, 0.2), 0x3e2723, x, 0.035, 0.05));
+
+  // Brazos (se balancean al andar)
+  const arms: THREE.Group[] = [];
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.position.set(side * (torsoR + 0.06), 0.85, 0);
+    arm.add(m(new THREE.CapsuleGeometry(0.07, 0.24, 4, 8), look.shirt, 0, -0.18, 0));
+    arm.add(m(new THREE.SphereGeometry(0.07, 8, 6), look.skin, 0, -0.38, 0));
+    arm.rotation.z = side * 0.12;
+    arms.push(arm);
+    body.add(arm);
+  }
+  body.userData.arms = arms;
+
+  // Cabeza y cara
+  body.add(m(new THREE.SphereGeometry(HEAD_R, 16, 12), look.skin, 0, HEAD_Y, 0));
+  for (const x of [-0.09, 0.09]) body.add(m(new THREE.SphereGeometry(0.035, 8, 6), 0x222222, x, HEAD_Y + 0.04, 0.21));
+  if (girl) for (const x of [-0.13, 0.13]) body.add(m(new THREE.SphereGeometry(0.035, 8, 6), 0xf8a5a5, x, HEAD_Y - 0.04, 0.19));
+
+  addHair(body, look);
+  addHat(body, look);
+  addAccessory(body, look);
 
   body.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) o.castShadow = true;
@@ -51,8 +269,15 @@ export function createCharacter(color: number, hat?: number): Character {
   return { group, body };
 }
 
-/** Balanceo al caminar. */
+/** Personaje con camiseta de un color (y gorra opcional): para personal y otros NPC. */
+export function createCharacter(color: number, hat?: number): Character {
+  return createAvatar({ ...DEFAULT_LOOK, shirt: color, hat: hat === undefined ? 'none' : 'cap', hatColor: hat ?? 0xffffff });
+}
+
+/** Balanceo al caminar (cuerpo y brazos). */
 export function animateWalk(body: THREE.Object3D, t: number, moving: boolean) {
   body.position.y = moving ? Math.abs(Math.sin(t * 11)) * 0.08 : 0;
   body.rotation.z = moving ? Math.sin(t * 11) * 0.06 : 0;
+  const arms = body.userData.arms as THREE.Object3D[] | undefined;
+  if (arms) arms.forEach((a, i) => (a.rotation.x = moving ? Math.sin(t * 11 + i * Math.PI) * 0.6 : 0));
 }

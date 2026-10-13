@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { animateWalk, createCharacter } from '../characters';
+import { animateWalk, createAvatar, randomLook } from '../characters';
 import { CUSTOMER_CAPACITY, CUSTOMER_SPEED, LAYOUT, REPUTATION } from '../config';
 import type { Game } from '../game';
 import { itemEmoji, type ItemType } from '../items';
@@ -10,7 +10,6 @@ import { consumeItem, gridLayout, Stack, transfer } from '../stack';
 import { faceTowards, rand, stepTowards } from '../util';
 
 const PATH = LAYOUT.path;
-const COLORS = [0xef5350, 0xab47bc, 0x7e57c2, 0x26a69a, 0xffa726, 0x8d6e63, 0xec407a, 0x66bb6a, 0xffca28];
 const BOX_GEO = new THREE.BoxGeometry(0.62, 0.22, 0.42);
 const BOX_MAT = new THREE.MeshLambertMaterial({ color: 0xd7b98e });
 
@@ -54,7 +53,8 @@ export class Customer {
     readonly vip: boolean,
   ) {
     this.timeLeft = patience;
-    const c = createCharacter(vip ? 0x6a1b9a : COLORS[Math.floor(Math.random() * COLORS.length)], vip ? 0xffc107 : undefined);
+    // Cada cliente con un aspecto aleatorio; los VIP llevan corona y traje morado.
+    const c = createAvatar(vip ? { ...randomLook(), shirt: 0x6a1b9a, hat: 'crown', accessory: 'bowtie' } : randomLook());
     this.group = c.group;
     this.body = c.body;
     this.group.position.copy(PATH.spawn);
