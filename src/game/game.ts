@@ -5,7 +5,7 @@ import { Thief } from './actors/thief';
 import { Worker, type StockTask } from './actors/worker';
 import { initAudio, sfx } from './audio';
 import { setMusicMood } from './music';
-import { CARE, DIFFICULTIES, EVENTS, SPECIAL, THIEF, type AreaId, LAYOUT, QUALITY, REPUTATION, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES, type DifficultyDef } from './config';
+import { CARE, CARRY, DIFFICULTIES, EVENTS, SPECIAL, THIEF, type AreaId, LAYOUT, QUALITY, REPUTATION, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES, type DifficultyDef } from './config';
 import { Hud } from './hud';
 import { Input } from './input';
 import { itemEmoji, itemName, PRODUCTS, type ItemType } from './items';
@@ -192,8 +192,10 @@ export class Game {
   level(id: string) {
     return this.upgrades[id] ?? 0;
   }
+  /** Velocidad del jugador: la de las zapatillas, menos un 2,5 % por cada cosa que lleva (máx. −45 %). */
   get playerSpeed() {
-    return STATS.playerSpeed(this.level('speed'));
+    const load = Math.min(CARRY.maxSlow, CARRY.slowPerItem * this.player.stack.count);
+    return STATS.playerSpeed(this.level('speed')) * (1 - load);
   }
   get growTime() {
     return STATS.growTime(this.level('growth'));
@@ -565,8 +567,9 @@ export class Game {
 
   /** Más reputación = más clientes; también lo ajusta la dificultad. */
   private updateSpawner(dt: number) {
-    // Solo se piden productos que ya se pueden conseguir (hay estantería y producción).
-    const types = shuffle([...new Set(this.shelves.filter((s) => s.stack.count > 0 || this.sourcesFor(s.type).length > 0).map((s) => s.type))]);
+    // Cualquier estantería abierta atrae clientes, aunque todavía no haya producto:
+    // si no lo repones a tiempo, se irán enfadados.
+    const types = shuffle([...new Set(this.shelves.map((s) => s.type))]);
     if (types.length === 0) return;
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;

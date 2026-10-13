@@ -32,6 +32,8 @@ Cada tienda se desbloquea comprando la zona **«Nueva tienda»** al final de la 
 | Comprar | Párate sobre un recuadro con precio hasta llenarlo |
 | Tirar | Lleva lo que no necesites al cubo de basura 🗑️ |
 
+Cuanto más llevas encima, **más lento caminas** (−2,5 % por cosa, hasta −45 %); las *Zapatillas* lo compensan. Cualquier estantería abierta **atrae clientes aunque aún no tenga producto**: si no la llenas a tiempo, se irán enfadados.
+
 ## Reputación y dificultad
 
 Al abrir una tienda eliges la **dificultad**:

@@ -207,6 +207,12 @@ export const QUALITY = {
   high: { label: 'Alta', maxPixelRatio: 2, antialias: true, shadows: true, shadowSize: 2048, softShadows: true },
 } as const;
 
+/** Cuanto más lleva encima el jugador, más lento camina. */
+export const CARRY = {
+  slowPerItem: 0.025,
+  maxSlow: 0.45,
+};
+
 // ───────── Mapa (común a todas las tiendas) ─────────
 
 const v = (x: number, z: number) => new THREE.Vector3(x, 0, z);
@@ -298,7 +304,7 @@ export interface UpgradeDef {
 
 export const UPGRADES: UpgradeDef[] = [
   { id: 'capacity', category: 'player', name: 'Mochila', icon: '🎒', desc: 'Capacidad: +2 de carga', base: 25, growth: 1.6, max: 10 },
-  { id: 'speed', category: 'player', name: 'Zapatillas', icon: '👟', desc: 'Velocidad: +8%', base: 30, growth: 1.6, max: 8 },
+  { id: 'speed', category: 'player', name: 'Zapatillas', icon: '👟', desc: 'Velocidad: +8% (compensa ir cargado)', base: 30, growth: 1.6, max: 8 },
   { id: 'growth', category: 'production', name: 'Abono', icon: '🌱', desc: 'Cultivos un 12% más rápidos', base: 40, growth: 1.65, max: 8, requires: ['field'] },
   { id: 'machines', category: 'production', name: 'Maquinaria', icon: '⚙️', desc: 'Rendimiento: máquinas un 12% más rápidas', base: 60, growth: 1.7, max: 8, requires: ['machine'] },
   { id: 'storage', category: 'production', name: 'Palés grandes', icon: '📦', desc: 'Capacidad: +2 en entrada y salida de máquinas', base: 50, growth: 1.6, max: 6, requires: ['machine'] },
