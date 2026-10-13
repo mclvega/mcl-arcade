@@ -32,7 +32,7 @@ export const STATS = {
 
 // ───────── Dificultad y reputación ─────────
 
-export type DifficultyId = 'relax' | 'easy' | 'normal' | 'hard';
+export type DifficultyId = 'relax' | 'easy' | 'normal' | 'hard' | 'expert' | 'nightmare';
 
 export interface DifficultyDef {
   label: string;
@@ -59,16 +59,84 @@ export interface DifficultyDef {
   /** Segundos con dinero sin recoger en la caja hasta que aparece un ladrón, y su velocidad. */
   thiefIdle: number;
   thiefSpeed: number;
+  /** Cada cuántos segundos hay una hora punta (oleada de clientes). 0 = nunca. */
+  rushEvery: number;
+  /** Probabilidad de avería por máquina y minuto de trabajo. 0 = nunca. */
+  breakdownRate: number;
+  /** Multiplica la probabilidad de clientes VIP. */
+  vipMult: number;
 }
 
 export const DIFFICULTIES: Record<DifficultyId, DifficultyDef> = {
-  relax: { label: 'Relajado', emoji: '😌', desc: 'Clientes muy pacientes. La tienda nunca cierra.', patienceBase: 70, patiencePerItem: 8, penaltyMult: 0.5, tipMult: 0.5, spawnMult: 1.15, startRep: 50, canLose: false, stockerTrips: 8, stockerRest: 4, cashierShift: 120, cashierBreak: 6, thiefIdle: 45, thiefSpeed: 3.0 },
-  easy: { label: 'Fácil', emoji: '🙂', desc: 'Clientes pacientes y castigos suaves.', patienceBase: 50, patiencePerItem: 6, penaltyMult: 0.6, tipMult: 0.8, spawnMult: 1.05, startRep: 60, canLose: true, stockerTrips: 6, stockerRest: 6, cashierShift: 90, cashierBreak: 8, thiefIdle: 32, thiefSpeed: 3.4 },
-  normal: { label: 'Normal', emoji: '😐', desc: 'El reto equilibrado.', patienceBase: 38, patiencePerItem: 5, penaltyMult: 1, tipMult: 1, spawnMult: 1, startRep: 50, canLose: true, stockerTrips: 4, stockerRest: 8, cashierShift: 60, cashierBreak: 10, thiefIdle: 24, thiefSpeed: 3.8 },
-  hard: { label: 'Difícil', emoji: '😤', desc: 'Poca paciencia y castigos duros, pero mejores propinas.', patienceBase: 27, patiencePerItem: 4, penaltyMult: 1.5, tipMult: 1.6, spawnMult: 0.9, startRep: 40, canLose: true, stockerTrips: 3, stockerRest: 12, cashierShift: 45, cashierBreak: 14, thiefIdle: 16, thiefSpeed: 4.3 },
+  relax: { label: 'Relajado', emoji: '😌', desc: 'Clientes muy pacientes. La tienda nunca cierra.', patienceBase: 70, patiencePerItem: 8, penaltyMult: 0.5, tipMult: 0.5, spawnMult: 1.15, startRep: 50, canLose: false, stockerTrips: 8, stockerRest: 4, cashierShift: 120, cashierBreak: 6, thiefIdle: 45, thiefSpeed: 3.0, rushEvery: 0, breakdownRate: 0, vipMult: 0.5 },
+  easy: { label: 'Fácil', emoji: '🙂', desc: 'Clientes pacientes y castigos suaves.', patienceBase: 50, patiencePerItem: 6, penaltyMult: 0.6, tipMult: 0.8, spawnMult: 1.05, startRep: 60, canLose: true, stockerTrips: 6, stockerRest: 6, cashierShift: 90, cashierBreak: 8, thiefIdle: 32, thiefSpeed: 3.4, rushEvery: 0, breakdownRate: 0, vipMult: 0.8 },
+  normal: { label: 'Normal', emoji: '😐', desc: 'El reto equilibrado.', patienceBase: 38, patiencePerItem: 5, penaltyMult: 1, tipMult: 1, spawnMult: 1, startRep: 50, canLose: true, stockerTrips: 4, stockerRest: 8, cashierShift: 60, cashierBreak: 10, thiefIdle: 24, thiefSpeed: 3.8, rushEvery: 240, breakdownRate: 0, vipMult: 1 },
+  hard: { label: 'Difícil', emoji: '😤', desc: 'Poca paciencia y castigos duros, pero mejores propinas.', patienceBase: 27, patiencePerItem: 4, penaltyMult: 1.5, tipMult: 1.6, spawnMult: 0.9, startRep: 40, canLose: true, stockerTrips: 3, stockerRest: 12, cashierShift: 45, cashierBreak: 14, thiefIdle: 16, thiefSpeed: 4.3, rushEvery: 180, breakdownRate: 0.05, vipMult: 1.3 },
+  expert: {
+    label: 'Experto',
+    emoji: '💀',
+    desc: 'Clientes exigentes, ladrones veloces y averías frecuentes.',
+    patienceBase: 22,
+    patiencePerItem: 3.5,
+    penaltyMult: 2,
+    tipMult: 2,
+    spawnMult: 0.85,
+    startRep: 35,
+    canLose: true,
+    stockerTrips: 3,
+    stockerRest: 14,
+    cashierShift: 40,
+    cashierBreak: 16,
+    thiefIdle: 12,
+    thiefSpeed: 4.6,
+    rushEvery: 150,
+    breakdownRate: 0.08,
+    vipMult: 1.6,
+  },
+  nightmare: {
+    label: 'Pesadilla',
+    emoji: '🔥',
+    desc: 'Solo para valientes: todo falla, nadie espera y cada error cuesta caro.',
+    patienceBase: 17,
+    patiencePerItem: 3,
+    penaltyMult: 2.5,
+    tipMult: 2.5,
+    spawnMult: 0.8,
+    startRep: 30,
+    canLose: true,
+    stockerTrips: 2,
+    stockerRest: 16,
+    cashierShift: 35,
+    cashierBreak: 18,
+    thiefIdle: 9,
+    thiefSpeed: 4.9,
+    rushEvery: 120,
+    breakdownRate: 0.12,
+    vipMult: 2,
+  },
 };
 
-export const DIFFICULTY_ORDER: DifficultyId[] = ['relax', 'easy', 'normal', 'hard'];
+export const DIFFICULTY_ORDER: DifficultyId[] = ['relax', 'easy', 'normal', 'hard', 'expert', 'nightmare'];
+
+/** Horas punta y averías. */
+export const EVENTS = {
+  rushDuration: 30,
+  /** Durante la hora punta los clientes llegan este factor más a menudo… */
+  rushSpawnMult: 0.35,
+  /** …y caben estos clientes más en la tienda. */
+  rushExtraCustomers: 6,
+  /** Segundos junto a la máquina para repararla. */
+  repairTime: 2.5,
+};
+
+/** Resumen de las mecánicas extra de una dificultad (para el selector). */
+export function difficultyFeatures(d: DifficultyDef): string {
+  const f: string[] = [];
+  if (d.rushEvery) f.push(`horas punta cada ${Math.round(d.rushEvery / 60)} min`);
+  if (d.breakdownRate) f.push('averías de máquinas');
+  if (!d.canLose) f.push('la tienda nunca cierra');
+  return f.length ? ` (${f.join(', ')})` : '';
+}
 
 /** Cambios de reputación (0–100) según cómo acaba cada cliente. */
 export const REPUTATION = {
@@ -168,7 +236,35 @@ export const LAYOUT = {
   trash: v(3, -1.5),
   /** Camión de pedidos especiales, delante de la tienda. */
   orderTruck: v(-1, 10.3),
+  /**
+   * Zonas que se compran para ampliar el mapa. Las estanterías desde `fromShelf`
+   * y los puestos de producción desde `fromFarm` quedan dentro de su zona.
+   */
+  areas: {
+    store: {
+      label: 'Ampliar tienda',
+      icon: '🏪',
+      fromShelf: 6,
+      rect: { minX: -10.2, maxX: 2, minZ: -10, maxZ: -2.2 },
+      barriers: [
+        [-10.2, -2.2, 2, -2.2],
+        [-10.2, -10, -10.2, -2.2],
+        [2, -10, 2, -2.2],
+      ] as [number, number, number, number][],
+      buy: v(0.9, -1.55),
+    },
+    farm: {
+      label: 'Ampliar producción',
+      icon: '🚜',
+      fromFarm: 10,
+      rect: { minX: 16.5, maxX: 29.5, minZ: -10, maxZ: 11.5 },
+      barriers: [[16.5, -10, 16.5, 11.5]] as [number, number, number, number][],
+      buy: v(16.2, 10.4),
+    },
+  },
 };
+
+export type AreaId = keyof typeof LAYOUT.areas;
 
 // ───────── Mejoras ─────────
 

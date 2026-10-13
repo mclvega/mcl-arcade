@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CARE, GENERATOR_TIME_MULT, PROCESSOR_CAPACITY } from '../config';
+import { CARE, EVENTS, GENERATOR_TIME_MULT, PROCESSOR_CAPACITY } from '../config';
 import type { Game } from '../game';
 import { createItemMesh, itemEmoji, itemSize, lambert, type ItemType } from '../items';
 import { emojiGroundLabel, emojiSprite, ring } from '../labels';
@@ -257,6 +257,10 @@ export class Processor implements Source {
   private foodBar?: THREE.Mesh;
   private sign: THREE.Sprite;
   private sadSign?: THREE.Sprite;
+  /** Avería (dificultades altas): deja de producir hasta que el jugador la repara. */
+  broken = false;
+  private repair = 0;
+  private brokenSign: THREE.Sprite;
 
   constructor(
     private game: Game,
@@ -349,10 +353,44 @@ export class Processor implements Source {
       },
     });
 
+    this.brokenSign = emojiSprite('🔧', 0.85);
+    this.brokenSign.position.copy(sign.position);
+    this.brokenSign.visible = false;
+    this.group.add(this.brokenSign);
+    if (!def.care) {
+      game.addZone({
+        pos: new THREE.Vector3(x, 0, z),
+        radius: 1.75,
+        interval: 0.1,
+        label: 'Reparar',
+        icon: '🔧',
+        enabled: () => this.broken,
+        canAct: () => this.broken,
+        act: () => {
+          this.repair += 0.1 / EVENTS.repairTime;
+          game.sfx.pay();
+          if (this.repair >= 1) this.fix();
+        },
+      });
+    }
+
     this.center = new THREE.Vector3(x, 1.0, z);
     this.access = new THREE.Vector3(x + 1.9, 0, z + 1.1);
     scene.add(this.group);
     game.obstacles.push(boxAt(x, z, 1.9, 1.9));
+  }
+
+  private breakDown() {
+    this.broken = true;
+    this.repair = 0;
+    this.game.onMachineBroken(this);
+  }
+
+  private fix() {
+    this.broken = false;
+    this.repair = 0;
+    this.visual.group.rotation.set(0, 0, 0);
+    this.game.onMachineFixed(this);
   }
 
   get hungry() {
@@ -385,7 +423,10 @@ export class Processor implements Source {
     this.elapsed += dt;
     if (this.def.care) this.updateCare(dt);
     const time = this.input ? processTime : processTime * GENERATOR_TIME_MULT;
-    const working = (!this.input || this.input.count > 0) && !this.output.full && !this.hungry;
+    let working = (!this.input || this.input.count > 0) && !this.output.full && !this.hungry;
+    const rate = this.game.difficulty.breakdownRate;
+    if (working && rate > 0 && !this.def.care && !this.broken && Math.random() < (rate / 60) * dt) this.breakDown();
+    if (this.broken) working = false;
     if (working) {
       this.t += dt;
       if (this.t >= time) {
@@ -395,8 +436,15 @@ export class Processor implements Source {
         this.output.push(makeItem(this.type, this.center.clone().setY(1.6)), 0.8, 0.35);
       }
     }
-    this.bar.scale.x = Math.max(0.001, this.t / time);
-    this.bar.visible = this.barBg.visible = working;
+    // Averiada: la barra muestra el progreso de la reparación y la máquina tiembla.
+    this.bar.scale.x = Math.max(0.001, this.broken ? this.repair : this.t / time);
+    (this.bar.material as THREE.MeshBasicMaterial).color.set(this.broken ? 0xffa000 : 0x76ff03);
+    this.bar.visible = this.barBg.visible = working || this.broken;
+    this.brokenSign.visible = this.broken;
+    if (this.broken) {
+      this.sign.visible = false;
+      this.visual.group.rotation.z = Math.sin(this.elapsed * 30) * 0.03;
+    } else if (!this.def.care) this.sign.visible = true;
     this.visual.animate?.(this.elapsed, working);
     if (this.def.style === 'oven' || this.def.style === 'factory') {
       const pulse = working ? 1 + Math.sin(this.elapsed * 14) * 0.02 : 1;

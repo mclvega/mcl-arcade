@@ -15,6 +15,14 @@ export function initAudio() {
 
 export const getAudioContext = () => ctx;
 
+// Al bloquear el móvil, cambiar de app o de pestaña se pausa todo el audio (música incluida).
+document.addEventListener('visibilitychange', () => {
+  if (!ctx) return;
+  if (document.hidden) void ctx.suspend();
+  else void ctx.resume();
+});
+window.addEventListener('pagehide', () => void ctx?.suspend());
+
 function tone(freq: number, dur: number, type: OscillatorType = 'sine', vol = 0.06, delay = 0, endFreq?: number) {
   if (!ctx || !settings.sound) return;
   const t0 = ctx.currentTime + delay;

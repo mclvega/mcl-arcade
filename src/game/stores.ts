@@ -1,4 +1,4 @@
-import { LAYOUT } from './config';
+import { LAYOUT, type AreaId } from './config';
 import { PRODUCTS } from './items';
 
 // ───────── Máquinas y generadores ─────────
@@ -250,13 +250,15 @@ export const STORE_MAP = new Map(STORES.map((s) => [s.id, s]));
 
 // ───────── Resolución de pasos → desbloqueos con posición ─────────
 
-export type UnlockKind = 'shelf' | 'field' | 'machine' | 'cashier' | 'stocker' | 'expansion';
+export type UnlockKind = 'shelf' | 'field' | 'machine' | 'cashier' | 'stocker' | 'expansion' | 'area';
 
 export interface UnlockDef {
   id: string;
   kind: UnlockKind;
-  /** shelf/field: producto · machine: id de máquina · expansion: id de tienda. */
+  /** shelf/field: producto · machine: id de máquina · expansion: id de tienda · area: id de zona. */
   ref?: string;
+  /** Zona que hay que haber comprado antes (si el hueco está en una ampliación). */
+  area?: string;
   label: string;
   icon: string;
   price: number;
@@ -264,7 +266,7 @@ export interface UnlockDef {
   z: number;
 }
 
-const KIND_MULT: Record<UnlockKind, number> = { shelf: 0.9, field: 1, machine: 1.2, cashier: 1.4, stocker: 2.2, expansion: 1 };
+const KIND_MULT: Record<UnlockKind, number> = { shelf: 0.9, field: 1, machine: 1.2, cashier: 1.4, stocker: 2.2, expansion: 1, area: 2.5 };
 
 const nicePrice = (p: number) => (p < 50 ? Math.round(p / 5) * 5 : p < 500 ? Math.round(p / 10) * 10 : Math.round(p / 50) * 50);
 
@@ -273,19 +275,34 @@ export function buildUnlocks(store: StoreDef): UnlockDef[] {
   let farmI = 0;
   let staffI = 0;
   const counts: Record<string, number> = {};
+  const out: UnlockDef[] = [];
+  const priceAt = (i: number, kind: UnlockKind) => nicePrice((10 + 4 * i + 0.55 * i * i) * KIND_MULT[kind] * store.costMult);
 
-  return store.steps.map((step, i) => {
+  /** La primera vez que un paso cae en una ampliación, se añade antes la compra de esa zona. */
+  const needArea = (id: AreaId, i: number): string => {
+    const areaId = `area:${id}`;
+    if (!out.some((u) => u.id === areaId)) {
+      const a = LAYOUT.areas[id];
+      out.push({ id: areaId, kind: 'area', ref: id, label: a.label, icon: a.icon, price: priceAt(i, 'area'), x: a.buy.x, z: a.buy.z });
+    }
+    return areaId;
+  };
+
+  store.steps.forEach((step, i) => {
     const [kind, ref] = step.split(':') as [UnlockKind, string | undefined];
     let pos;
     let label: string;
     let icon: string;
+    let area: string | undefined;
     switch (kind) {
       case 'shelf':
+        if (shelfI >= LAYOUT.areas.store.fromShelf) area = needArea('store', i);
         pos = LAYOUT.shelfSlots[shelfI++];
         label = 'Estantería';
         icon = PRODUCTS[ref!].emoji;
         break;
       case 'field': {
+        if (farmI >= LAYOUT.areas.farm.fromFarm) area = needArea('farm', i);
         pos = LAYOUT.farmSlots[farmI++];
         const grow = PRODUCTS[ref!].grow;
         label = grow === 'tree' ? 'Frutales' : grow === 'stalks' ? 'Campo' : 'Huerto';
@@ -293,6 +310,7 @@ export function buildUnlocks(store: StoreDef): UnlockDef[] {
         break;
       }
       case 'machine':
+        if (farmI >= LAYOUT.areas.farm.fromFarm) area = needArea('farm', i);
         pos = LAYOUT.farmSlots[farmI++];
         label = MACHINES[ref!].name;
         icon = MACHINES[ref!].emoji;
@@ -312,14 +330,16 @@ export function buildUnlocks(store: StoreDef): UnlockDef[] {
         label = 'Nueva tienda';
         icon = STORE_MAP.get(ref!)?.emoji ?? '🏪';
         break;
+      default:
+        throw new Error(`Paso desconocido: ${step}`);
     }
     if (!pos) throw new Error(`Sin hueco en el mapa para ${step} (${store.id})`);
     const key = ref ? `${kind}:${ref}` : kind;
     counts[key] = (counts[key] ?? 0) + 1;
-    const base = 10 + 4 * i + 0.55 * i * i;
-    const price = kind === 'expansion' ? store.expansionPrice ?? 1000 : nicePrice(base * KIND_MULT[kind] * store.costMult);
-    return { id: counts[key] > 1 ? `${key}#${counts[key]}` : key, kind, ref, label, icon, price, x: pos.x, z: pos.z };
+    const price = kind === 'expansion' ? store.expansionPrice ?? 1000 : priceAt(i, kind);
+    out.push({ id: counts[key] > 1 ? `${key}#${counts[key]}` : key, kind, ref, area, label, icon, price, x: pos.x, z: pos.z });
   });
+  return out;
 }
 
 export function startMoney(store: StoreDef, unlocks: UnlockDef[]) {

@@ -144,3 +144,17 @@ export function setMusicMood(m: number) {
 }
 
 onSettingsChange(applyVolume);
+
+// Con la página oculta (móvil bloqueado, otra app o pestaña) se detiene el programador de notas
+// para no gastar batería; al volver se reanuda desde el compás siguiente.
+document.addEventListener('visibilitychange', () => {
+  if (!ctx) return;
+  if (document.hidden) {
+    window.clearInterval(timer);
+    timer = 0;
+  } else if (!timer) {
+    nextTime = ctx.currentTime + 0.1;
+    step = 0;
+    timer = window.setInterval(schedule, 25);
+  }
+});

@@ -5,7 +5,7 @@ import { Thief } from './actors/thief';
 import { Worker, type StockTask } from './actors/worker';
 import { initAudio, sfx } from './audio';
 import { setMusicMood } from './music';
-import { CARE, DIFFICULTIES, SPECIAL, THIEF, LAYOUT, QUALITY, REPUTATION, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES, type DifficultyDef } from './config';
+import { CARE, DIFFICULTIES, EVENTS, SPECIAL, THIEF, type AreaId, LAYOUT, QUALITY, REPUTATION, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES, type DifficultyDef } from './config';
 import { Hud } from './hud';
 import { Input } from './input';
 import { itemEmoji, itemName, PRODUCTS, type ItemType } from './items';
@@ -19,6 +19,7 @@ import { Processor } from './stations/processor';
 import { Register } from './stations/register';
 import { Shelf } from './stations/shelf';
 import { TrashBin } from './stations/trash';
+import { LockedArea } from './stations/area';
 import { SpecialOrder, type OrderLine } from './stations/order';
 import { buildUnlocks, MACHINES, startMoney, STORE_MAP, type StoreDef, type UnlockDef, type UnlockKind } from './stores';
 import { addTween, clearTweens, popIn, updateTweens } from './tween';
@@ -55,6 +56,7 @@ export class Game {
   readonly player: Player;
   readonly register: Register;
   readonly order: SpecialOrder;
+  private areas = new Map<string, LockedArea>();
   readonly input: Input;
   readonly hud: Hud;
   readonly name: string;
@@ -70,6 +72,9 @@ export class Game {
   private orderTimer = SPECIAL.firstDelay;
   private thief: Thief | null = null;
   private thiefCooldown = 30;
+  private rushTimer = 0;
+  private rushLeft = 0;
+  private warnedBroken = false;
   cashierHired = false;
 
   private unlockMap: Map<string, UnlockDef>;
@@ -102,6 +107,7 @@ export class Game {
     this.name = displayName(store);
     this.difficulty = DIFFICULTIES[loadDifficulty(store.id)];
     this.rep = this.difficulty.startRep;
+    this.rushTimer = this.difficulty.rushEvery;
     this.unlocks = buildUnlocks(store);
     this.unlockMap = new Map(this.unlocks.map((u) => [u.id, u]));
     this.money = startMoney(store, this.unlocks);
@@ -116,7 +122,10 @@ export class Game {
     this.register = new Register(this, LAYOUT.register);
     new TrashBin(this, LAYOUT.trash);
     this.order = new SpecialOrder(this, LAYOUT.orderTruck);
-    for (const def of this.unlocks) this.buyZones.set(def.id, new BuyZone(this, def));
+    for (const def of this.unlocks) {
+      this.buyZones.set(def.id, new BuyZone(this, def));
+      if (def.kind === 'area') this.areas.set(def.id, new LockedArea(this, def.ref as AreaId));
+    }
     this.hud = new Hud(this);
 
     this.marker = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 16).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffd54f }));
@@ -327,6 +336,15 @@ export class Game {
       case 'expansion':
         unlockStore(def.ref!);
         break;
+      case 'area': {
+        const area = this.areas.get(def.id)!;
+        area.open(!instant);
+        if (!instant) {
+          this.camFocus.push({ pos: area.center, t: 1.4 });
+          this.hud.toast('🗺️ ¡Nueva zona desbloqueada! Ya tienes más espacio', 3500);
+        }
+        break;
+      }
     }
 
     this.applyStats();
@@ -355,10 +373,15 @@ export class Game {
   /** Muestra las siguientes zonas de compra pendientes, en orden. */
   private refreshZones(animate: boolean) {
     let shown = 0;
-    for (const def of this.unlocks) {
+    // Al empezar solo se ofrece lo imprescindible para vender (estantería + producción):
+    // así el dinero inicial no se puede gastar en algo que deje la tienda sin poder generar.
+    const starter = this.unlocks.slice(0, this.store.startSteps);
+    const inStarter = starter.some((u) => !this.unlocked.has(u.id));
+    for (const def of inStarter ? starter : this.unlocks) {
       if (shown >= REVEAL_WINDOW) break;
       const z = this.buyZones.get(def.id)!;
       if (z.done) continue;
+      if (def.area && !this.unlocked.has(def.area)) continue;
       if (!z.revealed) {
         z.reveal(animate);
         if (animate) this.camFocus.push({ pos: z.pos.clone(), t: 1.0 });
@@ -474,6 +497,7 @@ export class Game {
       }
     }
     for (const w of this.workers) w.update(dt);
+    this.updateRush(dt);
     this.updateSpawner(dt);
     this.updateOrders(dt);
     this.updateThief(dt);
@@ -548,11 +572,12 @@ export class Game {
     if (this.spawnTimer > 0) return;
     const n = this.shelves.length;
     const repFactor = THREE.MathUtils.clamp(1.4 - (0.8 * this.rep) / REPUTATION.max, 0.6, 1.4);
+    const rush = this.rushLeft > 0;
     this.spawnTimer =
-      Math.max(1.6, 6.5 - n * 0.45) * this.difficulty.spawnMult * STATS.spawnMult(this.level('marketing')) * repFactor * (0.8 + Math.random() * 0.4);
-    if (this.customers.length >= Math.min(16, 3 + n * 1.2)) return;
+      Math.max(1.6, 6.5 - n * 0.45) * this.difficulty.spawnMult * STATS.spawnMult(this.level('marketing')) * repFactor * (0.8 + Math.random() * 0.4) * (rush ? EVENTS.rushSpawnMult : 1);
+    if (this.customers.length >= Math.min(16, 3 + n * 1.2) + (rush ? EVENTS.rushExtraCustomers : 0)) return;
 
-    const vip = n >= 4 && Math.random() < REPUTATION.vipChance;
+    const vip = n >= 4 && Math.random() < REPUTATION.vipChance * this.difficulty.vipMult;
     const nTypes = Math.min(types.length, vip ? 3 : Math.random() < 0.2 ? 3 : randInt(1, 2));
     const wants: Want[] = types.slice(0, nTypes).map((type) => ({ type, qty: vip ? randInt(2, 3) : randInt(1, nTypes > 1 ? 2 : 3), got: 0 }));
     const items = wants.reduce((s, w) => s + w.qty, 0);
@@ -560,6 +585,37 @@ export class Game {
     const patience = (d.patienceBase + d.patiencePerItem * items) * this.patienceMult * (vip ? 0.75 : 1);
     this.customers.push(new Customer(this, wants, patience, vip));
     if (vip) this.hud.toast('👑 ¡Ha llegado un cliente VIP! Atiéndelo rápido', 3000);
+  }
+
+  // ───────── Horas punta y averías ─────────
+
+  private updateRush(dt: number) {
+    if (!this.difficulty.rushEvery || this.shelves.length < 2) return;
+    if (this.rushLeft > 0) {
+      this.rushLeft -= dt;
+      if (this.rushLeft <= 0) this.hud.toast('😮‍💨 Se acabó la hora punta', 2500);
+      return;
+    }
+    this.rushTimer -= dt;
+    if (this.rushTimer > 0) return;
+    this.rushTimer = this.difficulty.rushEvery;
+    this.rushLeft = EVENTS.rushDuration;
+    this.spawnTimer = 0;
+    sfx.alarm();
+    this.hud.toast('🔥 ¡Hora punta! Llegan muchos clientes durante 30 s', 3500);
+  }
+
+  onMachineBroken(p: Processor) {
+    sfx.angry();
+    if (!this.warnedBroken) {
+      this.warnedBroken = true;
+      this.hud.toast(`🔧 ¡Se ha averiado ${p.def.name}! Acércate para repararla`, 4000);
+    }
+  }
+
+  onMachineFixed(p: Processor) {
+    sfx.upgrade();
+    this.float('🔧 ✓', '#b9f6ca', p.group.position, 2.6);
   }
 
   // ───────── Ladrón ─────────
@@ -792,6 +848,10 @@ export class Game {
     if (this.thief && this.thief.state !== 'done') {
       target = this.thief.group.position;
       text = '🚨 ¡Atrapa al ladrón! Choca con él';
+    } else if (this.processors.some((x) => x.broken)) {
+      const m = this.processors.find((x) => x.broken)!;
+      target = m.group.position;
+      text = `🔧 Repara ${m.def.name}: quédate a su lado`;
     } else if (this.unlocked.size < 2 && affordable.length) {
       target = affordable[0].pos;
       text = `${verb} para comprar: ${affordable[0].def.label}`;
@@ -931,6 +991,7 @@ export class Game {
       if (typeof data.rep === 'number') this.rep = data.rep;
       if (data.stats) this.stats = { ...this.stats, ...data.stats };
       for (const def of this.unlocks) if (data.unlocked.includes(def.id)) this.unlock(def.id, true);
+      for (const def of this.unlocks) if (def.area && this.unlocked.has(def.id)) this.unlock(def.area, true);
       for (const [id, v] of Object.entries(data.paid ?? {})) {
         const z = this.buyZones.get(id);
         if (z && !z.done) {

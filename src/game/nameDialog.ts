@@ -1,4 +1,4 @@
-import { DIFFICULTIES, DIFFICULTY_ORDER, type DifficultyId } from './config';
+import { DIFFICULTIES, DIFFICULTY_ORDER, difficultyFeatures, type DifficultyId } from './config';
 import { displayName, loadDifficulty, loadPlayerName, loadStoreName, saveDifficulty, savePlayerName, saveStoreName } from './save';
 import type { StoreDef } from './stores';
 import { openModal } from './ui';
@@ -91,13 +91,13 @@ export function openNameDialog(store: StoreDef, onDone: () => void, firstTime = 
       const d = DIFFICULTIES[difficulty];
       extra!.innerHTML = `
         <b>Dificultad</b>
-        <div class="segmented" role="radiogroup" style="grid-template-columns: repeat(${DIFFICULTY_ORDER.length}, 1fr)">
+        <div class="segmented" role="radiogroup" style="grid-template-columns: repeat(3, 1fr)">
           ${DIFFICULTY_ORDER.map(
             (id) =>
               `<button type="button" role="radio" data-diff="${id}" class="${id === difficulty ? 'on' : ''}" aria-checked="${id === difficulty}">${DIFFICULTIES[id].emoji}<br><span>${DIFFICULTIES[id].label}</span></button>`,
           ).join('')}
         </div>
-        <small>${d.desc}${d.canLose ? ' Si la reputación baja de 0, la tienda cierra.' : ''}</small>`;
+        <small>${d.desc}${difficultyFeatures(d)}${d.canLose ? ' Si la reputación baja de 0, la tienda cierra.' : ''}</small>`;
     };
     render();
     extra.addEventListener('click', (e) => {

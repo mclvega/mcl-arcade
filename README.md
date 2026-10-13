@@ -17,6 +17,10 @@ Hecho con **Vite + TypeScript + Three.js**. Es un sitio 100 % estático, listo p
 
 Cada tienda se desbloquea comprando la zona **«Nueva tienda»** al final de la anterior. Cada una tiene su propio dinero, mejoras y progreso.
 
+**Inicio guiado:** al abrir una tienda solo se ofrece lo imprescindible para empezar a vender (la primera estantería y su producción). Así el dinero inicial no se puede gastar en algo que deje la tienda sin generar.
+
+**🗺️ Zonas:** al empezar solo están abiertas la parte delantera de la tienda (6 estanterías) y las dos primeras columnas de producción (10 puestos). El resto está acordonado. Cuando hace falta más espacio aparece **«Ampliar tienda»** o **«Ampliar producción»**; al comprarla desaparecen la cinta y la sombra, y la cámara enseña la zona nueva.
+
 ## Cómo se juega
 
 | Acción | Cómo |
@@ -32,16 +36,22 @@ Cada tienda se desbloquea comprando la zona **«Nueva tienda»** al final de la 
 
 Al abrir una tienda eliges la **dificultad**:
 
-| | 😌 Relajado | 🙂 Fácil | 😐 Normal | 😤 Difícil |
-|---|---|---|---|---|
-| Paciencia del cliente | 70 s + 8 s/producto | 50 s + 6 s | 38 s + 5 s | 27 s + 4 s |
-| Penalización | ×0,5 | ×0,6 | ×1 | ×1,5 |
-| Propinas | ×0,5 | ×0,8 | ×1 | ×1,6 |
-| Reputación inicial | 50 | 60 | 50 | 40 |
-| Reponedor: viajes / descanso | 8 / 4 s | 6 / 6 s | 4 / 8 s | 3 / 12 s |
-| Cajero: turno / descanso | 120 s / 6 s | 90 s / 8 s | 60 s / 10 s | 45 s / 14 s |
-| Ladrón: dinero sin recoger / velocidad | 45 s / lento | 32 s | 24 s | 16 s / rápido |
-| ¿Puede cerrar? | No | Sí | Sí | Sí |
+| | 😌 Relajado | 🙂 Fácil | 😐 Normal | 😤 Difícil | 💀 Experto | 🔥 Pesadilla |
+|---|---|---|---|---|---|---|
+| Paciencia del cliente | 70 s + 8 s/prod. | 50 s + 6 s | 38 s + 5 s | 27 s + 4 s | 22 s + 3,5 s | 17 s + 3 s |
+| Penalización | ×0,5 | ×0,6 | ×1 | ×1,5 | ×2 | ×2,5 |
+| Propinas | ×0,5 | ×0,8 | ×1 | ×1,6 | ×2 | ×2,5 |
+| Reputación inicial | 50 | 60 | 50 | 40 | 35 | 30 |
+| Reponedor: viajes / descanso | 8 / 4 s | 6 / 6 s | 4 / 8 s | 3 / 12 s | 3 / 14 s | 2 / 16 s |
+| Cajero: turno / descanso | 120 / 6 s | 90 / 8 s | 60 / 10 s | 45 / 14 s | 40 / 16 s | 35 / 18 s |
+| Ladrón: dinero sin recoger | 45 s | 32 s | 24 s | 16 s | 12 s | 9 s |
+| Clientes VIP | ×0,5 | ×0,8 | ×1 | ×1,3 | ×1,6 | ×2 |
+| 🔥 Horas punta | — | — | cada 4 min | cada 3 min | cada 2,5 min | cada 2 min |
+| 🔧 Averías | — | — | — | sí | frecuentes | muy frecuentes |
+| ¿Puede cerrar? | No | Sí | Sí | Sí | Sí | Sí |
+
+- **🔥 Horas punta:** durante 30 s llegan clientes casi tres veces más a menudo y caben más en la tienda.
+- **🔧 Averías:** una máquina deja de producir hasta que te quedas a su lado unos segundos para repararla (o pulsas *Reparar* en el modo con botón).
 
 - **⭐ Reputación (0–100):** cada cliente tiene una barra de paciencia sobre la cabeza para toda su visita, incluida la cola.
   - Servido rápido (más de la mitad de la paciencia): **+3 ⭐ y propina**.
@@ -57,6 +67,8 @@ Al abrir una tienda eliges la **dificultad**:
 - **🐾 Mascotas:** los hábitats tienen una barra de comida que se vacía. Si se queda vacía, los animales dejan de criar (😿) y la tienda pierde reputación cada pocos segundos.
 
 **Nombres:** al abrir el juego por primera vez se pregunta tu nombre (aparece sobre tu personaje). La primera vez que entras en una tienda le pones nombre; sale en el cartel de la tienda y en el menú. Ambos se pueden cambiar desde el menú con ✏️.
+
+**Al bloquear el móvil o cambiar de app/pestaña** el juego se detiene solo: el navegador deja de dibujar fotogramas, el audio se suspende y la partida se guarda. Al volver continúa donde estaba, sin «saltos» de tiempo.
 
 **Pantalla completa:** se activa al pulsar *Jugar* y se puede quitar o poner con el botón ⛶. El iPhone no permite pantalla completa en páginas web; ahí se consigue con *Compartir → Añadir a pantalla de inicio* (la web incluye un `manifest` para ello).
 
