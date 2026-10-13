@@ -34,6 +34,22 @@ button {
   font: inherit;
 }
 
+#app {
+  touch-action: none;
+}
+
+#fps {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #b9f6ca;
+  font: 700 13px ui-monospace, Consolas, monospace;
+  pointer-events: none;
+}
+
 #app canvas {
   display: block;
   width: 100vw;

@@ -34,7 +34,8 @@ Cada tienda se desbloquea comprando la zona **«Nueva tienda»** al final de la 
 **⚙️ Configuración** (desde el menú o en partida):
 
 - **Modo de interacción**: *Automático* (todo se hace al acercarte) o *Con botón*. En el modo con botón aparece un botón de acción abajo a la derecha con la acción disponible (Recoger, Soltar, Cobrar, Comprar o Tirar). También funciona con `Espacio` o `E`.
-- Sonido, sombras (desactívalas si va lento), pistas con flecha guía y pantalla completa automática.
+- **Calidad gráfica** (Baja / Media / Alta: resolución, sombras y suavizado de bordes) y **FPS máximos** (30 / 60 / máximo de la pantalla), con opción de **mostrar FPS**.
+- Sonido, pistas con flecha guía y pantalla completa automática.
 
 En **⬆ Mejoras** compras mochila, velocidad, abono, maquinaria y formación del personal. Puedes contratar un **cajero** y **reponedores** que abastecen las estanterías y las máquinas. La partida se guarda sola en el `localStorage` del navegador (no en cookies ni en un servidor). Eso significa que el progreso queda en ese dispositivo y en ese navegador: no pasa de un móvil a un PC, y se pierde si se borran los datos del sitio.
 

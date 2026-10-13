@@ -25,6 +25,14 @@ export const STATS = {
   staffCapacity: (lvl: number) => 4 + lvl,
 };
 
+// ───────── Calidad gráfica ─────────
+
+export const QUALITY = {
+  low: { label: 'Baja', maxPixelRatio: 0.75, antialias: false, shadows: false, shadowSize: 1024, softShadows: false },
+  medium: { label: 'Media', maxPixelRatio: 1.25, antialias: true, shadows: true, shadowSize: 1024, softShadows: false },
+  high: { label: 'Alta', maxPixelRatio: 2, antialias: true, shadows: true, shadowSize: 2048, softShadows: true },
+} as const;
+
 // ───────── Mapa (común a todas las tiendas) ─────────
 
 const v = (x: number, z: number) => new THREE.Vector3(x, 0, z);

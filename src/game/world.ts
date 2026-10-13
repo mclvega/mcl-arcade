@@ -51,7 +51,7 @@ function plane(w: number, d: number, color: number | THREE.Material, x: number, 
 }
 
 /** Suelo, luces, tienda y decorado según el tema de la tienda. */
-export function buildWorld(game: Game, theme: Theme, title: string) {
+export function buildWorld(game: Game, theme: Theme, title: string): THREE.DirectionalLight {
   scene.background = new THREE.Color(theme.sky);
 
   const hemi = new THREE.HemisphereLight(0xfff8e7, 0x6b8e4e, 1.4);
@@ -119,4 +119,5 @@ export function buildWorld(game: Game, theme: Theme, title: string) {
     scene.add(t);
   }
   castShadows(signBoard);
+  return sun;
 }

@@ -4,13 +4,27 @@ export interface Settings {
   /** auto: recoger/soltar/comprar al acercarse · manual: con el botón de acción. */
   mode: 'auto' | 'manual';
   sound: boolean;
-  shadows: boolean;
+  /** Resolución, sombras y suavizado de bordes. */
+  quality: 'low' | 'medium' | 'high';
+  /** Límite de fotogramas por segundo (0 = el máximo de la pantalla). */
+  fpsLimit: 0 | 30 | 60;
+  showFps: boolean;
   hints: boolean;
   /** Entrar en pantalla completa al jugar. */
   fullscreen: boolean;
 }
 
-const DEFAULTS: Settings = { mode: 'auto', sound: true, shadows: true, hints: true, fullscreen: true };
+const isTouch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+
+const DEFAULTS: Settings = {
+  mode: 'auto',
+  sound: true,
+  quality: isTouch ? 'medium' : 'high',
+  fpsLimit: 60,
+  showFps: false,
+  hints: true,
+  fullscreen: true,
+};
 
 function load(): Settings {
   try {

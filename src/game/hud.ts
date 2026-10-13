@@ -2,6 +2,7 @@ import { UPGRADES } from './config';
 import type { Game } from './game';
 import { toggleFullscreen } from './fullscreen';
 import { openSettings } from './settingsPanel';
+import { settings } from './settings';
 import type { Zone } from './types';
 import { $, isModalOpen, openModal, toast } from './ui';
 import { formatMoney } from './util';
@@ -10,6 +11,7 @@ export class Hud {
   private moneyEl = $('money');
   private moneyValue = $('money-value');
   private hintEl = $('hint');
+  private fpsEl = $('fps');
   private actionBtn = $<HTMLButtonElement>('action-btn');
   private actionIcon = this.actionBtn.querySelector<HTMLElement>('.act-icon')!;
   private actionLabel = this.actionBtn.querySelector<HTMLElement>('.act-label')!;
@@ -45,8 +47,15 @@ export class Hud {
     btn.addEventListener('contextmenu', (e) => e.preventDefault(), opts);
   }
 
+  /** Contador de FPS (opción «Mostrar FPS»). `null` lo reinicia. */
+  setFps(fps: number | null) {
+    this.fpsEl.hidden = !settings.showFps;
+    if (settings.showFps) this.fpsEl.textContent = fps === null ? '… FPS' : `${Math.round(fps)} FPS`;
+  }
+
   dispose() {
     this.abort.abort();
+    this.fpsEl.hidden = true;
     $('hud').hidden = true;
     this.actionBtn.hidden = true;
     this.hintEl.classList.add('hidden');

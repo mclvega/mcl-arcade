@@ -3,7 +3,7 @@ import { Customer, type Want } from './actors/customer';
 import { Player } from './actors/player';
 import { Worker, type StockTask } from './actors/worker';
 import { initAudio, sfx } from './audio';
-import { LAYOUT, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES } from './config';
+import { LAYOUT, QUALITY, REVEAL_WINDOW, STATS, upgradeCost, UPGRADES } from './config';
 import { Hud } from './hud';
 import { Input } from './input';
 import { itemName, type ItemType } from './items';
@@ -33,7 +33,7 @@ export interface Nav {
 
 export class Game {
   readonly sfx = sfx;
-  readonly renderer: THREE.WebGLRenderer;
+  renderer: THREE.WebGLRenderer;
   readonly camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 200);
   readonly zones: Zone[] = [];
   readonly obstacles: Box[] = [];
@@ -70,9 +70,13 @@ export class Game {
   private actionZone: Zone | null = null;
   private abort = new AbortController();
   private unsubSettings: () => void;
+  private sun: THREE.DirectionalLight;
+  private lastFrame = 0;
+  private fpsFrames = 0;
+  private fpsTime = 0;
 
   constructor(
-    container: HTMLElement,
+    private container: HTMLElement,
     readonly store: StoreDef,
     private nav: Nav,
   ) {
@@ -81,14 +85,11 @@ export class Game {
     this.unlockMap = new Map(this.unlocks.map((u) => [u.id, u]));
     this.money = startMoney(store, this.unlocks);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = settings.shadows;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(this.renderer.domElement);
-
-    buildWorld(this, store.theme, this.name);
-    this.input = new Input(this.renderer.domElement, document.getElementById('joystick')!, document.getElementById('joy-knob')!, this.abort.signal);
+    this.renderer = this.createRenderer();
+    this.sun = buildWorld(this, store.theme, this.name);
+    this.applyShadowSize();
+    // El joystick escucha al contenedor: así el canvas se puede cambiar al variar la calidad.
+    this.input = new Input(container, document.getElementById('joystick')!, document.getElementById('joy-knob')!, this.abort.signal);
     this.player = new Player(STATS.playerCapacity(0), LAYOUT.playerStart, loadPlayerName() ?? undefined);
     scene.add(this.player.group);
     this.register = new Register(this, LAYOUT.register);
@@ -362,9 +363,43 @@ export class Game {
   // ───────── Bucle ─────────
 
   private frame() {
-    const dt = Math.min(this.clock.getDelta(), 1 / 20);
-    this.update(dt);
+    const now = performance.now();
+    if (settings.fpsLimit) {
+      const interval = 1000 / settings.fpsLimit;
+      const elapsed = now - this.lastFrame;
+      // Margen de 2 ms para no perder fotogramas por la variación del refresco de pantalla.
+      if (elapsed < interval - 2) return;
+      this.lastFrame = now - (elapsed >= interval ? elapsed % interval : 0);
+    }
+    const raw = this.clock.getDelta();
+    this.update(Math.min(raw, 1 / 20));
     this.renderer.render(scene, this.camera);
+
+    this.fpsFrames++;
+    this.fpsTime += raw;
+    if (this.fpsTime >= 0.5) {
+      this.hud.setFps(this.fpsFrames / this.fpsTime);
+      this.fpsFrames = 0;
+      this.fpsTime = 0;
+    }
+  }
+
+  private createRenderer(): THREE.WebGLRenderer {
+    const q = QUALITY[settings.quality];
+    const r = new THREE.WebGLRenderer({ antialias: q.antialias, powerPreference: 'high-performance' });
+    r.setPixelRatio(Math.min(window.devicePixelRatio, q.maxPixelRatio));
+    r.shadowMap.enabled = q.shadows;
+    r.shadowMap.type = q.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.container.appendChild(r.domElement);
+    return r;
+  }
+
+  private applyShadowSize() {
+    const size = QUALITY[settings.quality].shadowSize;
+    if (this.sun.shadow.mapSize.x === size) return;
+    this.sun.shadow.mapSize.set(size, size);
+    this.sun.shadow.map?.dispose();
+    this.sun.shadow.map = null;
   }
 
   private update(dt: number) {
@@ -560,14 +595,34 @@ export class Game {
     this.renderer.setSize(w, h);
   }
 
+  /** Aplica calidad y FPS al momento, sin salir de la tienda. */
   private applySettings() {
-    if (this.renderer.shadowMap.enabled !== settings.shadows) {
-      this.renderer.shadowMap.enabled = settings.shadows;
-      scene.traverse((o) => {
-        const m = (o as THREE.Mesh).material;
-        if (m) (Array.isArray(m) ? m : [m]).forEach((x) => (x.needsUpdate = true));
-      });
+    const q = QUALITY[settings.quality];
+    if (this.renderer.getContextAttributes()?.antialias !== q.antialias) {
+      // El suavizado de bordes solo se elige al crear el contexto WebGL: se rehace el renderer.
+      this.renderer.setAnimationLoop(null);
+      this.renderer.dispose();
+      this.renderer.forceContextLoss();
+      this.renderer.domElement.remove();
+      this.renderer = this.createRenderer();
+      this.resize();
+      this.start();
+    } else {
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.maxPixelRatio));
+      this.resize();
+      const softType = q.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+      if (this.renderer.shadowMap.enabled !== q.shadows || this.renderer.shadowMap.type !== softType) {
+        this.renderer.shadowMap.enabled = q.shadows;
+        this.renderer.shadowMap.type = softType;
+        scene.traverse((o) => {
+          const m = (o as THREE.Mesh).material;
+          if (m) (Array.isArray(m) ? m : [m]).forEach((x) => (x.needsUpdate = true));
+        });
+      }
     }
+    this.applyShadowSize();
+    this.lastFrame = 0;
+    this.hud.setFps(null);
     this.hintTimer = 0;
   }
 
