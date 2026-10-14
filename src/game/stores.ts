@@ -153,7 +153,7 @@ export const STORES: StoreDef[] = [
     tagline: 'Cría, alimenta y cuida mascotas felices.',
     names: ['Patitas Felices', 'Mundo Mascota', 'El Arca de McL', 'Huellitas', 'Bigotes y Colas'],
     saleMult: 1.15,
-    costMult: 1.25,
+    costMult: 1.4,
     startSteps: 3,
     expansionPrice: 2200,
     theme: { sky: 0x9ccc65, ground: 0x9ccc65, farm: 0xaed581, floorA: 0xe3f2fd, floorB: 0xbbdefb, wall: 0xede7f6, sign: 0x8e24aa, shelf: 0xffb74d, shelfBack: 0xfb8c00, trees: 'round', accent: '#8e24aa' },

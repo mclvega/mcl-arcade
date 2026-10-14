@@ -6,7 +6,7 @@ import { settings } from './settings';
 import type { SpecialOrder } from './stations/order';
 import type { Zone } from './types';
 import { itemEmoji } from './items';
-import { $, isModalOpen, openModal, toast } from './ui';
+import { $, closeModal, isModalOpen, openModal, toast } from './ui';
 import { formatMoney } from './util';
 
 export class Hud {
@@ -21,6 +21,7 @@ export class Hud {
   private actionIcon = this.actionBtn.querySelector<HTMLElement>('.act-icon')!;
   private actionLabel = this.actionBtn.querySelector<HTMLElement>('.act-label')!;
   private upgradesEl: HTMLElement | null = null;
+  private placeBar = $('place-bar');
   private shownMoney = -1;
   private hint = '';
   private action: Zone | null | undefined;
@@ -34,6 +35,13 @@ export class Hud {
     $('btn-home').addEventListener('click', () => game.goToMenu(), opts);
     $('btn-upgrades').addEventListener('click', () => this.openUpgrades(), opts);
     $('btn-move').addEventListener('click', () => this.openMove(), opts);
+    this.placeBar.querySelector('.place-ok')!.addEventListener('click', () => game.confirmPlacing(), opts);
+    this.placeBar.querySelector('.place-cancel')!.addEventListener('click', () => game.cancelPlacing(), opts);
+    window.addEventListener('keydown', (e) => {
+      if (!game.isPlacing || isModalOpen()) return;
+      if (e.code === 'Enter') game.confirmPlacing();
+      else if (e.code === 'Escape') game.cancelPlacing();
+    }, opts);
     $('btn-settings').addEventListener('click', () => openSettings(), opts);
     $('btn-fullscreen').addEventListener('click', () => toggleFullscreen(), opts);
     this.orderEl.querySelector('.order-close')!.addEventListener('click', () => game.rejectOrder(), opts);
@@ -99,6 +107,7 @@ export class Hud {
     this.abort.abort();
     this.fpsEl.hidden = true;
     this.orderEl.hidden = true;
+    this.placeBar.hidden = true;
     $('hud').hidden = true;
     this.actionBtn.hidden = true;
     this.hintEl.classList.add('hidden');
@@ -181,55 +190,38 @@ export class Hud {
     el.innerHTML = rows.join('');
   }
 
-  /** Paso 1: elegir qué mover. */
+  /** Elegir qué mover; luego se coloca caminando por el mapa. */
   openMove() {
     const g = this.game;
+    g.cancelPlacing();
     const el = document.createElement('div');
     const rows = g.movables().map((m) => {
       const cost = g.moveCost(m.id);
       return `<div class="upg">
         <div class="upg-icon">${m.icon}</div>
-        <div class="upg-info"><b>${m.label}</b><small>Cambiar de sitio o intercambiar con otra</small></div>
+        <div class="upg-info"><b>${m.label}</b><small>Colócala donde quieras</small></div>
         <button type="button" data-id="${m.id}" ${g.money < cost ? 'disabled' : ''}>$${formatMoney(cost)}</button>
       </div>`;
     });
-    el.innerHTML = `<p class="muted center">Elige qué quieres mover. Los productos que haya encima se pierden al moverla.</p>${rows.join('')}`;
+    el.innerHTML = `<p class="muted center">Elige qué mover y camina hasta el sitio nuevo. Los productos que tenga encima se pierden al moverla.</p>${rows.join('')}`;
     el.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-id]');
-      if (btn && !btn.disabled) this.openMoveTarget(btn.dataset.id!);
+      if (!btn || btn.disabled) return;
+      closeModal();
+      g.startPlacing(btn.dataset.id!);
     });
     openModal('🏗️ Mover estructuras', el, [{ label: 'Cerrar', primary: true }]);
   }
 
-  /** Paso 2: elegir el hueco de destino en un plano. */
-  private openMoveTarget(id: string) {
-    const g = this.game;
-    const item = g.movables().find((m) => m.id === id)!;
-    const slots = g.moveSlots(id);
-    const xs = [...new Set(slots.map((s) => s.x))].sort((a, b) => a - b);
-    const zs = [...new Set(slots.map((s) => s.z))].sort((a, b) => a - b);
-    const el = document.createElement('div');
-    const cells: string[] = [];
-    for (const z of zs)
-      for (const x of xs) {
-        const s = slots.find((q) => q.x === x && q.z === z);
-        if (!s) {
-          cells.push('<span></span>');
-          continue;
-        }
-        const here = x === item.x && z === item.z;
-        const built = s.occupant && g.unlocked.has(s.occupant.id);
-        const icon = here ? item.icon : s.locked ? '🔒' : built ? s.occupant!.icon : s.occupant ? '·' : '＋';
-        const title = here ? 'Aquí está ahora' : s.locked ? 'Zona sin ampliar' : built ? `Intercambiar con ${s.occupant!.label}` : 'Hueco libre';
-        cells.push(`<button type="button" class="${here ? 'here' : built ? 'busy' : ''}" data-x="${x}" data-z="${z}" title="${title}" ${here || s.locked ? 'disabled' : ''}>${icon}</button>`);
-      }
-    el.innerHTML = `<p class="muted center">${item.icon} <b>${item.label}</b> · $${formatMoney(g.moveCost(id))}<br>Toca un hueco: si está ocupado, se intercambian.</p>
-      <div class="move-grid" style="--cols:${xs.length}">${cells.join('')}</div>`;
-    el.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-x]');
-      if (btn && !btn.disabled) g.moveStructure(id, Number(btn.dataset.x), Number(btn.dataset.z));
-    });
-    // Abrir otro modal desde el botón: se hace tras cerrar el actual.
-    setTimeout(() => openModal('🏗️ ¿A dónde?', el, [{ label: '◀ Volver', onClick: () => setTimeout(() => this.openMove(), 0) }, { label: 'Cancelar', primary: true }]), 0);
+  /** Barra del modo colocar (null la oculta). */
+  setPlacing(label: string | null, cost = 0) {
+    this.placeBar.hidden = !label;
+    if (!label) return;
+    this.placeBar.querySelector('.place-text')!.textContent = `🏗️ Mover ${label}: camina hasta el sitio nuevo`;
+    this.placeBar.querySelector('.place-ok')!.textContent = `✅ Colocar aquí · $${formatMoney(cost)}`;
+  }
+
+  setPlaceOk(ok: boolean) {
+    this.placeBar.querySelector('.place-ok')!.classList.toggle('blocked', !ok);
   }
 }

@@ -26,7 +26,7 @@ import { addTween, clearTweens, popIn, updateTweens } from './tween';
 import type { Sink, Source, Zone } from './types';
 import { floatingText } from './labels';
 import { isModalOpen, openModal } from './ui';
-import { damp, distXZ, rand, randInt, shuffle, type Box } from './util';
+import { boxAt, damp, distXZ, rand, randInt, shuffle, type Box } from './util';
 import { buildWorld } from './world';
 
 const CAM_OFFSET = new THREE.Vector3(12, 16, 12);
@@ -182,6 +182,7 @@ export class Game {
 
   /** Guarda y libera todo (escena, listeners, GPU) para volver al menú o cambiar de tienda. */
   dispose() {
+    this.cancelPlacing();
     this.save();
     this.renderer.setAnimationLoop(null);
     this.abort.abort();
@@ -297,37 +298,100 @@ export class Game {
     return Math.max(10, Math.round(base / 5) * 5);
   }
 
-  /** Huecos posibles para una estructura, con lo que hay ahora en cada uno. */
-  moveSlots(id: string): { x: number; z: number; locked: boolean; occupant?: UnlockDef }[] {
-    const def = this.unlockMap.get(id);
-    const slots = !def ? LAYOUT.trashSpots : def.kind === 'shelf' ? LAYOUT.shelfSlots : LAYOUT.farmSlots;
-    const same = (u: UnlockDef) => (def?.kind === 'shelf' ? u.kind === 'shelf' : u.kind === 'field' || u.kind === 'machine');
-    return slots.map((p) => {
-      const a = areaAt(p.x, p.z);
-      return {
-        x: p.x,
-        z: p.z,
-        locked: !!a && !this.unlocked.has(`area:${a}`),
-        occupant: def ? this.unlocks.find((u) => same(u) && u.x === p.x && u.z === p.z) : undefined,
-      };
-    });
+  /** Espacio que ocupa algo (con sus zonas de uso), para que no se pisen al moverlo. */
+  private footprint(kind: UnlockKind | 'trash', x: number, z: number): Box {
+    if (kind === 'shelf') return { minX: x - 1.3, maxX: x + 1.3, minZ: z - 0.5, maxZ: z + 1.6 };
+    if (kind === 'field' || kind === 'machine') return { minX: x - 3, maxX: x + 3, minZ: z - 1.8, maxZ: z + 1.8 };
+    if (kind === 'trash') return { minX: x - 0.6, maxX: x + 0.6, minZ: z - 1.1, maxZ: z + 1.4 };
+    return boxAt(x, z, 2.3, 2.3);
   }
 
-  /**
-   * Paga y mueve una estructura. Si el hueco está ocupado (o reservado para algo por
-   * construir), se intercambian. La tienda se vuelve a montar con la nueva disposición.
-   */
-  moveStructure(id: string, x: number, z: number) {
-    const cost = this.moveCost(id);
-    if (this.money < cost) return;
-    const slot = this.moveSlots(id).find((s) => s.x === x && s.z === z);
-    if (!slot || slot.locked) return;
+  /** ¿Se puede poner `id` con su centro en (x, z)? */
+  canPlace(id: string, x: number, z: number) {
     const def = this.unlockMap.get(id);
-    const from = def ? { x: def.x, z: def.z } : { x: this.trashPos.x, z: this.trashPos.z };
-    if (from.x === x && from.z === z) return;
-    if (slot.occupant) this.moves[slot.occupant.id] = from;
-    this.moves[id] = { x, z };
-    this.money -= cost;
+    const kind = def?.kind ?? 'trash';
+    const f = this.footprint(kind, x, z);
+    const inside = (r: Box) => f.minX >= r.minX && f.maxX <= r.maxX && f.minZ >= r.minZ && f.maxZ <= r.maxZ;
+    const hits = (r: Box) => f.minX < r.maxX && f.maxX > r.minX && f.minZ < r.maxZ && f.maxZ > r.minZ;
+    const S = LAYOUT.store;
+    const F = LAYOUT.farm;
+    const B = LAYOUT.bounds;
+    if (kind === 'shelf' && !inside({ minX: S.minX + 0.4, maxX: S.maxX, minZ: S.minZ + 0.4, maxZ: S.maxZ })) return false;
+    if ((kind === 'field' || kind === 'machine') && !inside({ minX: F.minX, maxX: F.maxX, minZ: F.minZ + 0.2, maxZ: F.maxZ - 0.2 })) return false;
+    if (kind === 'trash' && !inside({ minX: B.minX + 0.2, maxX: B.maxX, minZ: B.minZ + 0.4, maxZ: B.maxZ })) return false;
+    for (const [aid, a] of Object.entries(LAYOUT.areas)) if (!this.unlocked.has(`area:${aid}`) && hits(a.rect)) return false;
+    // Caja, cola de clientes, entrada y otros puntos fijos.
+    const fixed: Box[] = [
+      boxAt(LAYOUT.register.x - 0.2, LAYOUT.register.z - 1.2, 3.4, 6),
+      boxAt(LAYOUT.cashierZone.x, LAYOUT.cashierZone.z, 2.4, 2.4),
+      { minX: -20, maxX: -9, minZ: 4, maxZ: 7.4 },
+    ];
+    if (fixed.some(hits)) return false;
+    for (const u of this.unlocks) {
+      if (u.id === id) continue;
+      if (u.kind === 'area') {
+        if (!this.unlocked.has(u.id) && hits(boxAt(u.x, u.z, 2, 2))) return false;
+        continue;
+      }
+      if (u.kind === 'cashier' && this.unlocked.has(u.id)) continue;
+      if (hits(this.footprint(u.kind, u.x, u.z))) return false;
+    }
+    if (id !== 'trash' && hits(this.footprint('trash', this.trashPos.x, this.trashPos.z))) return false;
+    return true;
+  }
+
+  // ── Modo colocar: una silueta sigue al jugador y se confirma con el botón ──
+
+  private placing: { id: string; ghost: THREE.Mesh; x: number; z: number; ok: boolean } | null = null;
+
+  startPlacing(id: string) {
+    const def = this.unlockMap.get(id);
+    const f = this.footprint(def?.kind ?? 'trash', 0, 0);
+    const ghost = new THREE.Mesh(
+      new THREE.PlaneGeometry(f.maxX - f.minX, f.maxZ - f.minZ).rotateX(-Math.PI / 2).translate((f.minX + f.maxX) / 2, 0, (f.minZ + f.maxZ) / 2),
+      new THREE.MeshBasicMaterial({ color: 0x66bb6a, transparent: true, opacity: 0.45, depthWrite: false }),
+    );
+    scene.add(ghost);
+    this.placing = { id, ghost, x: 0, z: 0, ok: false };
+    this.hud.setPlacing(def?.label ?? 'Basura', this.moveCost(id));
+    this.updatePlacing();
+  }
+
+  get isPlacing() {
+    return !!this.placing;
+  }
+
+  private updatePlacing() {
+    const p = this.placing;
+    if (!p) return;
+    p.x = Math.round(this.player.pos.x * 2) / 2;
+    p.z = Math.round(this.player.pos.z * 2) / 2;
+    p.ok = this.canPlace(p.id, p.x, p.z) && this.money >= this.moveCost(p.id);
+    p.ghost.position.set(p.x, 0.06, p.z);
+    (p.ghost.material as THREE.MeshBasicMaterial).color.setHex(p.ok ? 0x66bb6a : 0xef5350);
+    this.hud.setPlaceOk(p.ok);
+  }
+
+  cancelPlacing() {
+    if (!this.placing) return;
+    scene.remove(this.placing.ghost);
+    this.placing.ghost.geometry.dispose();
+    this.placing = null;
+    this.hud.setPlacing(null);
+  }
+
+  /** Paga y deja la estructura donde está la silueta; la tienda se vuelve a montar. */
+  confirmPlacing() {
+    const p = this.placing;
+    if (!p) return;
+    this.updatePlacing();
+    if (!p.ok) {
+      this.hud.toast('🚫 No cabe ahí: busca un sitio libre (silueta verde)');
+      return;
+    }
+    this.money -= this.moveCost(p.id);
+    this.moves[p.id] = { x: p.x, z: p.z };
+    this.cancelPlacing();
     sfx.upgrade();
     this.save();
     this.nav.store(this.store.id);
@@ -556,6 +620,7 @@ export class Game {
     this.player.update(dt, paused ? { x: 0, y: 0 } : this.input.vector(), this.playerSpeed, this.obstacles);
     this.updateZones(dt, paused);
 
+    this.updatePlacing();
     for (const p of this.plots) p.update(dt, this.growTime);
     for (const p of this.processors) p.update(dt, this.processTime);
     this.register.update(dt);
