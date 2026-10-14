@@ -1,3 +1,4 @@
+import type * as THREE from 'three';
 import { LAYOUT, type AreaId } from './config';
 import { PRODUCTS } from './items';
 
@@ -270,7 +271,62 @@ const KIND_MULT: Record<UnlockKind, number> = { shelf: 0.9, field: 1, machine: 1
 
 const nicePrice = (p: number) => (p < 50 ? Math.round(p / 5) * 5 : p < 500 ? Math.round(p / 10) * 10 : Math.round(p / 50) * 50);
 
-export function buildUnlocks(store: StoreDef): UnlockDef[] {
+/** Aleatorio reproducible a partir de un texto: cada tienda tiene siempre el mismo mapa. */
+function seeded(text: string) {
+  let h = 2166136261;
+  for (const c of text) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return ((h ^= h >>> 16) >>> 0) / 4294967296;
+  };
+}
+
+function shuffled<T>(list: T[], rnd: () => number) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+export interface StoreLayout {
+  shelfSlots: THREE.Vector3[];
+  farmSlots: THREE.Vector3[];
+  trash: THREE.Vector3;
+}
+
+/**
+ * Disposición propia de cada tienda: mismo terreno, pero las estanterías, los puestos
+ * de producción y la basura cambian de sitio. Lo que queda dentro de una ampliación sigue ahí.
+ */
+export function storeLayout(store: StoreDef): StoreLayout {
+  const rnd = seeded(store.id);
+  const nS = LAYOUT.areas.store.fromShelf;
+  const shelfSlots = [...shuffled(LAYOUT.shelfSlots.slice(0, nS), rnd), ...shuffled(LAYOUT.shelfSlots.slice(nS), rnd)];
+  // Producción: se mantiene más o menos la cercanía a la tienda, con variación.
+  const nF = LAYOUT.areas.farm.fromFarm;
+  const jitter = (list: THREE.Vector3[]) =>
+    list
+      .map((p, i) => ({ p, k: i + rnd() * 6 }))
+      .sort((a, b) => a.k - b.k)
+      .map((e) => e.p);
+  const farmSlots = [...jitter(LAYOUT.farmSlots.slice(0, nF)), ...jitter(LAYOUT.farmSlots.slice(nF))];
+  const trash = LAYOUT.trashSpots[Math.floor(rnd() * LAYOUT.trashSpots.length)];
+  return { shelfSlots, farmSlots, trash };
+}
+
+/** Zona de ampliación que contiene un punto (si la hay). */
+export function areaAt(x: number, z: number): AreaId | undefined {
+  for (const [id, a] of Object.entries(LAYOUT.areas) as [AreaId, (typeof LAYOUT.areas)[AreaId]][]) {
+    const r = a.rect;
+    if (x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ) return id;
+  }
+  return undefined;
+}
+
+export function buildUnlocks(store: StoreDef, layout = storeLayout(store)): UnlockDef[] {
   let shelfI = 0;
   let farmI = 0;
   let staffI = 0;
@@ -297,13 +353,13 @@ export function buildUnlocks(store: StoreDef): UnlockDef[] {
     switch (kind) {
       case 'shelf':
         if (shelfI >= LAYOUT.areas.store.fromShelf) area = needArea('store', i);
-        pos = LAYOUT.shelfSlots[shelfI++];
+        pos = layout.shelfSlots[shelfI++];
         label = 'Estantería';
         icon = PRODUCTS[ref!].emoji;
         break;
       case 'field': {
         if (farmI >= LAYOUT.areas.farm.fromFarm) area = needArea('farm', i);
-        pos = LAYOUT.farmSlots[farmI++];
+        pos = layout.farmSlots[farmI++];
         const grow = PRODUCTS[ref!].grow;
         label = grow === 'tree' ? 'Frutales' : grow === 'stalks' ? 'Campo' : 'Huerto';
         icon = PRODUCTS[ref!].emoji;
@@ -311,7 +367,7 @@ export function buildUnlocks(store: StoreDef): UnlockDef[] {
       }
       case 'machine':
         if (farmI >= LAYOUT.areas.farm.fromFarm) area = needArea('farm', i);
-        pos = LAYOUT.farmSlots[farmI++];
+        pos = layout.farmSlots[farmI++];
         label = MACHINES[ref!].name;
         icon = MACHINES[ref!].emoji;
         break;

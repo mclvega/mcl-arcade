@@ -21,7 +21,7 @@ import { Shelf } from './stations/shelf';
 import { TrashBin } from './stations/trash';
 import { LockedArea } from './stations/area';
 import { SpecialOrder, type OrderLine } from './stations/order';
-import { buildUnlocks, MACHINES, startMoney, STORE_MAP, type StoreDef, type UnlockDef, type UnlockKind } from './stores';
+import { areaAt, buildUnlocks, MACHINES, startMoney, STORE_MAP, storeLayout, type StoreDef, type UnlockDef, type UnlockKind } from './stores';
 import { addTween, clearTweens, popIn, updateTweens } from './tween';
 import type { Sink, Source, Zone } from './types';
 import { floatingText } from './labels';
@@ -76,6 +76,9 @@ export class Game {
   private rushLeft = 0;
   private warnedBroken = false;
   cashierHired = false;
+  /** Dónde está la basura en esta tienda. */
+  readonly trashPos: THREE.Vector3;
+  private moves: Record<string, { x: number; z: number }> = {};
 
   private unlockMap: Map<string, UnlockDef>;
   private upgrades: Record<string, number> = {};
@@ -108,8 +111,20 @@ export class Game {
     this.difficulty = DIFFICULTIES[loadDifficulty(store.id)];
     this.rep = this.difficulty.startRep;
     this.rushTimer = this.difficulty.rushEvery;
-    this.unlocks = buildUnlocks(store);
+    const layout = storeLayout(store);
+    this.unlocks = buildUnlocks(store, layout);
     this.unlockMap = new Map(this.unlocks.map((u) => [u.id, u]));
+    this.moves = { ...loadStore(store.id)?.moves };
+    for (const [id, m] of Object.entries(this.moves)) {
+      const def = this.unlockMap.get(id);
+      if (!def) continue;
+      def.x = m.x;
+      def.z = m.z;
+      const a = areaAt(m.x, m.z);
+      def.area = a && this.unlockMap.has(`area:${a}`) ? `area:${a}` : undefined;
+    }
+    const t = this.moves.trash;
+    this.trashPos = t ? new THREE.Vector3(t.x, 0, t.z) : layout.trash.clone();
     this.money = startMoney(store, this.unlocks);
 
     this.renderer = this.createRenderer();
@@ -120,7 +135,7 @@ export class Game {
     this.player = new Player(STATS.playerCapacity(0), LAYOUT.playerStart, loadLook(), loadPlayerName() ?? undefined);
     scene.add(this.player.group);
     this.register = new Register(this, LAYOUT.register);
-    new TrashBin(this, LAYOUT.trash);
+    new TrashBin(this, this.trashPos);
     this.order = new SpecialOrder(this, LAYOUT.orderTruck);
     for (const def of this.unlocks) {
       this.buyZones.set(def.id, new BuyZone(this, def));
@@ -263,6 +278,59 @@ export class Game {
       p.output.capacity = machineCap;
       if (p.input) p.input.capacity = machineCap;
     }
+  }
+
+  // ───────── Mover estructuras ─────────
+
+  /** Lo que se puede cambiar de sitio: lo ya construido con hueco propio, y la basura. */
+  movables(): { id: string; label: string; icon: string; x: number; z: number }[] {
+    const list = this.unlocks
+      .filter((u) => this.unlocked.has(u.id) && (u.kind === 'shelf' || u.kind === 'field' || u.kind === 'machine'))
+      .map((u) => ({ id: u.id, label: u.label, icon: u.icon, x: u.x, z: u.z }));
+    list.push({ id: 'trash', label: 'Basura', icon: '🗑️', x: this.trashPos.x, z: this.trashPos.z });
+    return list;
+  }
+
+  moveCost(id: string) {
+    const def = this.unlockMap.get(id);
+    const base = def ? def.price * 0.3 : 15 * this.store.costMult;
+    return Math.max(10, Math.round(base / 5) * 5);
+  }
+
+  /** Huecos posibles para una estructura, con lo que hay ahora en cada uno. */
+  moveSlots(id: string): { x: number; z: number; locked: boolean; occupant?: UnlockDef }[] {
+    const def = this.unlockMap.get(id);
+    const slots = !def ? LAYOUT.trashSpots : def.kind === 'shelf' ? LAYOUT.shelfSlots : LAYOUT.farmSlots;
+    const same = (u: UnlockDef) => (def?.kind === 'shelf' ? u.kind === 'shelf' : u.kind === 'field' || u.kind === 'machine');
+    return slots.map((p) => {
+      const a = areaAt(p.x, p.z);
+      return {
+        x: p.x,
+        z: p.z,
+        locked: !!a && !this.unlocked.has(`area:${a}`),
+        occupant: def ? this.unlocks.find((u) => same(u) && u.x === p.x && u.z === p.z) : undefined,
+      };
+    });
+  }
+
+  /**
+   * Paga y mueve una estructura. Si el hueco está ocupado (o reservado para algo por
+   * construir), se intercambian. La tienda se vuelve a montar con la nueva disposición.
+   */
+  moveStructure(id: string, x: number, z: number) {
+    const cost = this.moveCost(id);
+    if (this.money < cost) return;
+    const slot = this.moveSlots(id).find((s) => s.x === x && s.z === z);
+    if (!slot || slot.locked) return;
+    const def = this.unlockMap.get(id);
+    const from = def ? { x: def.x, z: def.z } : { x: this.trashPos.x, z: this.trashPos.z };
+    if (from.x === x && from.z === z) return;
+    if (slot.occupant) this.moves[slot.occupant.id] = from;
+    this.moves[id] = { x, z };
+    this.money -= cost;
+    sfx.upgrade();
+    this.save();
+    this.nav.store(this.store.id);
   }
 
   // ───────── Dinero ─────────
@@ -886,7 +954,7 @@ export class Game {
         target = bestSink.access;
         text = `Lleva ${itemName(bestSink.type)} ${bestSink.isShelf ? 'a la estantería' : 'a la máquina'}`;
       } else {
-        target = LAYOUT.trash;
+        target = this.trashPos;
         text = 'No hay dónde dejarlo: tíralo a la basura 🗑️';
       }
     } else if (affordable.length) {
@@ -983,7 +1051,7 @@ export class Game {
     if (this.over) return;
     const paid: Record<string, number> = {};
     for (const [id, z] of this.buyZones) if (!z.done && z.paid > 0) paid[id] = z.paid;
-    saveStore(this.store.id, { money: Math.floor(this.money), unlocked: [...this.unlocked], paid, upgrades: this.upgrades, rep: this.rep, stats: this.stats });
+    saveStore(this.store.id, { money: Math.floor(this.money), unlocked: [...this.unlocked], paid, upgrades: this.upgrades, rep: this.rep, stats: this.stats, moves: this.moves });
   }
 
   private loadGame() {

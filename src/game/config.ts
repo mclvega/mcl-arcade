@@ -239,7 +239,8 @@ export const LAYOUT = {
   staffHomes: [v(3, 3.8), v(3, 5.6), v(3, 7.4)],
   cashierZone: v(-14.4, -6),
   expansionZone: v(-5.5, 6.4),
-  trash: v(3, -1.5),
+  /** Sitios posibles para la basura (pasillo entre la tienda y la producción). */
+  trashSpots: [v(3, -1.5), v(3, -4.6), v(3, -7.9), v(3, 1.4)],
   /** Camión de pedidos especiales, delante de la tienda. */
   orderTruck: v(-1, 10.3),
   /**

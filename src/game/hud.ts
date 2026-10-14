@@ -33,6 +33,7 @@ export class Hud {
     $('store-name').textContent = `${game.store.emoji} ${game.name}`;
     $('btn-home').addEventListener('click', () => game.goToMenu(), opts);
     $('btn-upgrades').addEventListener('click', () => this.openUpgrades(), opts);
+    $('btn-move').addEventListener('click', () => this.openMove(), opts);
     $('btn-settings').addEventListener('click', () => openSettings(), opts);
     $('btn-fullscreen').addEventListener('click', () => toggleFullscreen(), opts);
     this.orderEl.querySelector('.order-close')!.addEventListener('click', () => game.rejectOrder(), opts);
@@ -178,5 +179,57 @@ export class Hud {
     rows.push(`<p class="muted center">Construcciones: ${built}/${g.unlocks.length}<br>
       ${g.difficulty.emoji} ${g.difficulty.label} · ⭐ ${Math.round(g.rep)} · ${s.served} clientes atendidos · ${s.lost} perdidos · $${formatMoney(s.tips)} en propinas</p>`);
     el.innerHTML = rows.join('');
+  }
+
+  /** Paso 1: elegir qué mover. */
+  openMove() {
+    const g = this.game;
+    const el = document.createElement('div');
+    const rows = g.movables().map((m) => {
+      const cost = g.moveCost(m.id);
+      return `<div class="upg">
+        <div class="upg-icon">${m.icon}</div>
+        <div class="upg-info"><b>${m.label}</b><small>Cambiar de sitio o intercambiar con otra</small></div>
+        <button type="button" data-id="${m.id}" ${g.money < cost ? 'disabled' : ''}>$${formatMoney(cost)}</button>
+      </div>`;
+    });
+    el.innerHTML = `<p class="muted center">Elige qué quieres mover. Los productos que haya encima se pierden al moverla.</p>${rows.join('')}`;
+    el.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-id]');
+      if (btn && !btn.disabled) this.openMoveTarget(btn.dataset.id!);
+    });
+    openModal('🏗️ Mover estructuras', el, [{ label: 'Cerrar', primary: true }]);
+  }
+
+  /** Paso 2: elegir el hueco de destino en un plano. */
+  private openMoveTarget(id: string) {
+    const g = this.game;
+    const item = g.movables().find((m) => m.id === id)!;
+    const slots = g.moveSlots(id);
+    const xs = [...new Set(slots.map((s) => s.x))].sort((a, b) => a - b);
+    const zs = [...new Set(slots.map((s) => s.z))].sort((a, b) => a - b);
+    const el = document.createElement('div');
+    const cells: string[] = [];
+    for (const z of zs)
+      for (const x of xs) {
+        const s = slots.find((q) => q.x === x && q.z === z);
+        if (!s) {
+          cells.push('<span></span>');
+          continue;
+        }
+        const here = x === item.x && z === item.z;
+        const built = s.occupant && g.unlocked.has(s.occupant.id);
+        const icon = here ? item.icon : s.locked ? '🔒' : built ? s.occupant!.icon : s.occupant ? '·' : '＋';
+        const title = here ? 'Aquí está ahora' : s.locked ? 'Zona sin ampliar' : built ? `Intercambiar con ${s.occupant!.label}` : 'Hueco libre';
+        cells.push(`<button type="button" class="${here ? 'here' : built ? 'busy' : ''}" data-x="${x}" data-z="${z}" title="${title}" ${here || s.locked ? 'disabled' : ''}>${icon}</button>`);
+      }
+    el.innerHTML = `<p class="muted center">${item.icon} <b>${item.label}</b> · $${formatMoney(g.moveCost(id))}<br>Toca un hueco: si está ocupado, se intercambian.</p>
+      <div class="move-grid" style="--cols:${xs.length}">${cells.join('')}</div>`;
+    el.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-x]');
+      if (btn && !btn.disabled) g.moveStructure(id, Number(btn.dataset.x), Number(btn.dataset.z));
+    });
+    // Abrir otro modal desde el botón: se hace tras cerrar el actual.
+    setTimeout(() => openModal('🏗️ ¿A dónde?', el, [{ label: '◀ Volver', onClick: () => setTimeout(() => this.openMove(), 0) }, { label: 'Cancelar', primary: true }]), 0);
   }
 }

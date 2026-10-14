@@ -986,6 +986,38 @@ button {
   transform: translate(-50%, 0);
 }
 
+.move-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  gap: 6px;
+  max-width: 320px;
+  margin: 8px auto 0;
+}
+
+.move-grid button {
+  aspect-ratio: 1;
+  font-size: 22px;
+  border-radius: 10px;
+  border: 2px dashed #b0bec5;
+  background: #f5f5f5;
+  cursor: pointer;
+}
+
+.move-grid button.busy {
+  border-style: solid;
+  background: #fff8e1;
+}
+
+.move-grid button.here {
+  border: 2px solid #43a047;
+  background: #e8f5e9;
+}
+
+.move-grid button:disabled:not(.here) {
+  opacity: 0.45;
+  cursor: default;
+}
+
 @media (max-width: 520px) {
   #btn-upgrades {
     padding: 10px 10px;

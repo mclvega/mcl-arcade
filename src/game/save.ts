@@ -11,6 +11,8 @@ export interface StoreSave {
   upgrades: Record<string, number>;
   rep?: number;
   stats?: StoreStats;
+  /** Estructuras que el jugador ha cambiado de sitio (id de desbloqueo o 'trash'). */
+  moves?: Record<string, { x: number; z: number }>;
 }
 
 export interface StoreStats {
