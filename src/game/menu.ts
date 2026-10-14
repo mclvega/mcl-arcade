@@ -74,6 +74,7 @@ function renderGreeting() {
 }
 
 export function showMenu(onPlay: (s: StoreDef) => void) {
+  $('version').textContent = `v${__APP_VERSION__}`;
   $('menu').hidden = false;
   renderStores(onPlay);
   renderGreeting();
