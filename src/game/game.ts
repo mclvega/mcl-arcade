@@ -126,6 +126,7 @@ export class Game {
     const t = this.moves.trash;
     this.trashPos = t ? new THREE.Vector3(t.x, 0, t.z) : layout.trash.clone();
     this.money = startMoney(store, this.unlocks);
+    this.relocateBlocked(new Set(loadStore(store.id)?.unlocked ?? []));
 
     this.renderer = this.createRenderer();
     this.sun = buildWorld(this, store.theme, this.name);
@@ -307,7 +308,7 @@ export class Game {
   }
 
   /** ¿Se puede poner `id` con su centro en (x, z)? */
-  canPlace(id: string, x: number, z: number) {
+  canPlace(id: string, x: number, z: number, built: Set<string> = this.unlocked) {
     const def = this.unlockMap.get(id);
     const kind = def?.kind ?? 'trash';
     const f = this.footprint(kind, x, z);
@@ -319,7 +320,7 @@ export class Game {
     if (kind === 'shelf' && !inside({ minX: S.minX + 0.4, maxX: S.maxX, minZ: S.minZ + 0.4, maxZ: S.maxZ })) return false;
     if ((kind === 'field' || kind === 'machine') && !inside({ minX: F.minX, maxX: F.maxX, minZ: F.minZ + 0.2, maxZ: F.maxZ - 0.2 })) return false;
     if (kind === 'trash' && !inside({ minX: B.minX + 0.2, maxX: B.maxX, minZ: B.minZ + 0.4, maxZ: B.maxZ })) return false;
-    for (const [aid, a] of Object.entries(LAYOUT.areas)) if (!this.unlocked.has(`area:${aid}`) && hits(a.rect)) return false;
+    for (const [aid, a] of Object.entries(LAYOUT.areas)) if (!built.has(`area:${aid}`) && hits(a.rect)) return false;
     // Caja, cola de clientes, entrada y otros puntos fijos.
     const fixed: Box[] = [
       boxAt(LAYOUT.register.x - 0.2, LAYOUT.register.z - 1.2, 3.4, 6),
@@ -330,19 +331,40 @@ export class Game {
     for (const u of this.unlocks) {
       if (u.id === id) continue;
       if (u.kind === 'area') {
-        if (!this.unlocked.has(u.id) && hits(boxAt(u.x, u.z, 2, 2))) return false;
+        if (!built.has(u.id) && hits(boxAt(u.x, u.z, 2, 2))) return false;
         continue;
       }
-      if (u.kind === 'cashier' && this.unlocked.has(u.id)) continue;
-      // Lo aún no comprado solo reserva su punto de compra, no todo su hueco.
-      if (!this.unlocked.has(u.id)) {
-        if (hits(boxAt(u.x, u.z, 2, 2))) return false;
-        continue;
-      }
+      if (u.kind === 'cashier' && built.has(u.id)) continue;
+      // Lo aún no comprado no cuenta: si le quitan el sitio, se recoloca al cargar.
+      if (!built.has(u.id)) continue;
       if (hits(this.footprint(u.kind, u.x, u.z))) return false;
     }
     if (id !== 'trash' && hits(this.footprint('trash', this.trashPos.x, this.trashPos.z))) return false;
     return true;
+  }
+
+  /** Lo no comprado cuyo sitio ha quedado ocupado por algo movido pasa al hueco libre más cercano. */
+  private relocateBlocked(built: Set<string>) {
+    if (!Object.keys(this.moves).length) return;
+    for (const u of this.unlocks) {
+      if (built.has(u.id) || (u.kind !== 'shelf' && u.kind !== 'field' && u.kind !== 'machine')) continue;
+      if (this.canPlace(u.id, u.x, u.z, built)) continue;
+      let best: { x: number; z: number } | null = null;
+      for (let r = 0.5; r <= 30 && !best; r += 0.5) {
+        for (let a = 0; a < 360 && !best; a += 15) {
+          const x = Math.round((u.x + Math.cos((a * Math.PI) / 180) * r) * 2) / 2;
+          const z = Math.round((u.z + Math.sin((a * Math.PI) / 180) * r) * 2) / 2;
+          if (this.canPlace(u.id, x, z, built)) best = { x, z };
+        }
+      }
+      if (!best) continue;
+      u.x = best.x;
+      u.z = best.z;
+      const a = areaAt(u.x, u.z);
+      u.area = a && this.unlockMap.has(`area:${a}`) ? `area:${a}` : undefined;
+      this.moves[u.id] = best;
+      built.add(u.id); // los siguientes no se le pueden poner encima
+    }
   }
 
   // ── Modo colocar: una silueta sigue al jugador y se confirma con el botón ──
