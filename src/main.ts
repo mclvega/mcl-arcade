@@ -76,3 +76,8 @@ function start(store: StoreDef) {
 const requested = STORE_MAP.get(new URLSearchParams(location.search).get('tienda') ?? '');
 if (requested && isStoreUnlocked(requested.id)) play(requested);
 else showMenu(play);
+
+// Service worker: guarda el juego en caché para jugar sin conexión (también instalado como app).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => undefined));
+}
