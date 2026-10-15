@@ -10,5 +10,7 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 1000,
+    // three.js en su propio archivo: el navegador lo guarda entre versiones del juego.
+    rolldownOptions: { output: { codeSplitting: { groups: [{ name: 'three', test: /node_modules[\/]three/ }] } } },
   },
 });

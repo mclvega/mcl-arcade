@@ -186,6 +186,7 @@ export class Game {
     this.cancelPlacing();
     this.save();
     this.renderer.setAnimationLoop(null);
+    this.perf?.remove();
     this.abort.abort();
     this.unsubSettings();
     this.hud.dispose();
@@ -601,6 +602,11 @@ export class Game {
 
   private frame() {
     const now = performance.now();
+    // Con un menú abierto (pausa, mejoras, ajustes) basta con 10 FPS: ahorra batería.
+    if (isModalOpen()) {
+      if (now - this.lastModalFrame < 100) return;
+      this.lastModalFrame = now;
+    }
     if (settings.fpsLimit) {
       const interval = 1000 / settings.fpsLimit;
       const elapsed = now - this.lastFrame;
@@ -610,7 +616,9 @@ export class Game {
     }
     const raw = this.clock.getDelta();
     this.update(Math.min(raw, 1 / 20));
+    const t0 = this.perf ? performance.now() : 0;
     this.renderer.render(scene, this.camera);
+    if (this.perf) this.updatePerf(now, performance.now() - t0, raw);
 
     this.fpsFrames++;
     this.fpsTime += raw;
@@ -619,6 +627,31 @@ export class Game {
       this.fpsFrames = 0;
       this.fpsTime = 0;
     }
+  }
+
+  private lastModalFrame = 0;
+  /** Monitor `?perf` (ver PLAN-rendimiento.md): FPS, ms de render, llamadas de dibujo y memoria. */
+  private perf: HTMLElement | null = new URLSearchParams(location.search).has('perf') ? document.body.appendChild(document.createElement('pre')) : null;
+  private perfT = 0;
+  private perfRender = 0;
+  private perfFps = 60;
+
+  private updatePerf(now: number, renderMs: number, dt: number) {
+    const el = this.perf!;
+    this.perfRender = this.perfRender * 0.9 + renderMs * 0.1;
+    if (dt > 0) this.perfFps = this.perfFps * 0.9 + (1 / dt) * 0.1;
+    if (now - this.perfT < 250) return;
+    this.perfT = now;
+    el.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:99;margin:0;padding:6px 8px;font:11px/1.35 monospace;color:#9f9;background:rgb(0 0 0 / 0.75);border:1px solid #222;border-radius:6px;pointer-events:none';
+    const info = this.renderer.info;
+    const heap = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+    el.textContent = [
+      `FPS ${this.perfFps.toFixed(0)} · resolución ×${this.renderer.getPixelRatio()}`,
+      `render ${this.perfRender.toFixed(2)} ms`,
+      `llamadas ${info.render.calls} · triángulos ${info.render.triangles}`,
+      `geometrías ${info.memory.geometries} · texturas ${info.memory.textures}`,
+      heap ? `heap ${(heap.usedJSHeapSize / 1048576).toFixed(1)} MB` : '',
+    ].filter(Boolean).join('\n');
   }
 
   private createRenderer(): THREE.WebGLRenderer {
