@@ -1071,7 +1071,7 @@ button {
   .store-card, .panel-card, #money, #order, #rep, .menu-foot button, .panel-card button, #place-bar { background: #000; color: var(--ui-text); border: 1px solid #222; box-shadow: none; }
   .store-emoji { background: color-mix(in srgb, var(--accent) 25%, black); }
   .progress, .segmented, .panel-head button, .panel-foot button, .order-close, .name-row .dice { background: #111; color: var(--ui-text); }
-  .segmented button.on { background: #000; color: var(--ui-text); border: 1px solid #333; }
+  .segmented button.on { background: var(--accent, #ffb02e); color: #000; border: 1px solid var(--accent, #ffb02e); }
   .cz-canvas canvas { background: radial-gradient(circle at 50% 30%, #1a1a1a, #000); }
   .cz-random, .cz-chips button { background: #111 !important; color: var(--ui-text); }
   .store-card button:disabled, .upg button:disabled, #place-bar .place-ok.blocked { background: #222; color: #777; }
