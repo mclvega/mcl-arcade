@@ -32,6 +32,15 @@ export class Hud {
     const opts = { signal: this.abort.signal };
     $('hud').hidden = false;
     $('store-name').textContent = `${game.store.emoji} ${game.name}`;
+    // En vertical solo se ve ☰; al pulsarlo se despliegan los demás y se recogen al elegir uno.
+    const hudButtons = document.querySelector<HTMLElement>('.hud-buttons')!;
+    const menuBtn = $('btn-hud-menu');
+    hudButtons.classList.remove('open');
+    hudButtons.addEventListener('click', (e) => {
+      const open = e.target === menuBtn ? !hudButtons.classList.contains('open') : false;
+      hudButtons.classList.toggle('open', open);
+      menuBtn.setAttribute('aria-expanded', String(open));
+    }, opts);
     $('btn-home').addEventListener('click', () => game.goToMenu(), opts);
     $('btn-upgrades').addEventListener('click', () => this.openUpgrades(), opts);
     $('btn-move').addEventListener('click', () => this.openMove(), opts);
