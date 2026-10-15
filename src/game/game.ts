@@ -294,8 +294,8 @@ export class Game {
 
   moveCost(id: string) {
     const def = this.unlockMap.get(id);
-    const base = def ? def.price * 0.3 : 15 * this.store.costMult;
-    return Math.max(10, Math.round(base / 5) * 5);
+    const base = def ? def.price * 0.75 : 60 * this.store.costMult;
+    return Math.max(30, Math.round(base / 5) * 5);
   }
 
   /** Espacio que ocupa algo (con sus zonas de uso), para que no se pisen al moverlo. */
@@ -334,6 +334,11 @@ export class Game {
         continue;
       }
       if (u.kind === 'cashier' && this.unlocked.has(u.id)) continue;
+      // Lo aún no comprado solo reserva su punto de compra, no todo su hueco.
+      if (!this.unlocked.has(u.id)) {
+        if (hits(boxAt(u.x, u.z, 2, 2))) return false;
+        continue;
+      }
       if (hits(this.footprint(u.kind, u.x, u.z))) return false;
     }
     if (id !== 'trash' && hits(this.footprint('trash', this.trashPos.x, this.trashPos.z))) return false;
