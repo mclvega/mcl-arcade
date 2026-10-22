@@ -1,5 +1,9 @@
+import { unlockAllStores } from './save';
 import { settings, updateSettings, type Settings } from './settings';
 import { openModal } from './ui';
+
+/** Código que desbloquea todas las tiendas. */
+const CODIGO_TIENDAS = 'mcl';
 
 type Toggle = 'sound' | 'music' | 'hints' | 'fullscreen' | 'showFps';
 type Choice = 'mode' | 'quality' | 'fpsLimit';
@@ -86,10 +90,18 @@ function render(el: HTMLElement) {
                <input type="range" min="0" max="100" step="5" data-range="musicVolume" value="${Math.round(settings.musicVolume * 100)}" ${settings.music ? '' : 'disabled'} /></label>`
           : ''
       }`,
-    ).join('')}`;
+    ).join('')}
+    <div class="set-block">
+      <b>🔑 Código de acceso</b>
+      <form class="name-row" data-pass>
+        <input type="password" name="codigo" autocomplete="off" placeholder="Código" aria-label="Código de acceso" />
+        <button type="submit" class="primary">Desbloquear</button>
+      </form>
+      <small data-pass-msg>Escribe el código para desbloquear todas las tiendas.</small>
+    </div>`;
 }
 
-export function openSettings() {
+export function openSettings(closed?: () => void) {
   const el = document.createElement('div');
   el.className = 'settings';
   render(el);
@@ -109,9 +121,20 @@ export function openSettings() {
     updateSettings({ [key]: input.checked });
     if (key === 'music') render(el);
   });
+  el.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const input = form.elements.namedItem('codigo') as HTMLInputElement;
+    const msg = el.querySelector<HTMLElement>('[data-pass-msg]')!;
+    if (input.value.trim().toLowerCase() === CODIGO_TIENDAS) {
+      unlockAllStores();
+      msg.textContent = '✅ ¡Todas las tiendas desbloqueadas!';
+    } else msg.textContent = '❌ Código incorrecto.';
+    input.value = '';
+  });
   el.addEventListener('input', (e) => {
     const input = e.target as HTMLInputElement;
     if (input.dataset.range === 'musicVolume') updateSettings({ musicVolume: Number(input.value) / 100 });
   });
-  openModal('⚙️ Configuración', el, [{ label: 'Listo', primary: true }]);
+  openModal('⚙️ Configuración', el, [{ label: 'Listo', primary: true }], closed);
 }

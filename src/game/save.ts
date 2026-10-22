@@ -93,6 +93,11 @@ export function unlockStore(id: string) {
   write(`${PREFIX}:meta`, meta);
 }
 
+/** Desbloquea todas las tiendas (código de acceso en Configuración). */
+export function unlockAllStores() {
+  for (const s of STORES) unlockStore(s.id);
+}
+
 export function clearAll() {
   try {
     for (const k of Object.keys(localStorage)) if (k.startsWith(PREFIX)) localStorage.removeItem(k);

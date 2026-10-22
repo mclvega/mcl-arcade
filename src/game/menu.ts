@@ -79,7 +79,7 @@ export function showMenu(onPlay: (s: StoreDef) => void) {
   renderStores(onPlay);
   renderGreeting();
   if (!loadPlayerName()) openPlayerNameDialog(() => openCustomizer(renderGreeting));
-  $('menu-settings').onclick = () => openSettings();
+  $('menu-settings').onclick = () => openSettings(() => renderStores(onPlay));
   $('menu-help').onclick = () => openModal('❓ Cómo jugar', HELP_HTML);
   $('menu-customize').onclick = () => openCustomizer();
   $('menu-fullscreen').onclick = () => toggleFullscreen();
