@@ -1,6 +1,6 @@
 # McL Arcade 🕹️
 
-Juego *idle arcade* en 3D para el navegador. Cultiva, extrae y fabrica productos, repón las estanterías, cobra a los clientes y reinvierte para hacer crecer una cadena de **6 tiendas**, cuidando la reputación de cada una.
+Juego *idle arcade* en 3D para el navegador. Cultiva, extrae y fabrica productos, repón las estanterías, cobra a los clientes y reinvierte para hacer crecer una cadena de **7 tiendas**, cuidando la reputación de cada una.
 
 Hecho con **Vite + TypeScript + Three.js**. Es un sitio 100 % estático, listo para publicar gratis en Netlify.
 
@@ -14,6 +14,7 @@ Hecho con **Vite + TypeScript + Three.js**. Es un sitio 100 % estático, listo p
 | 🥐 **Panadería & Café** | 11: pan, cruasanes, dónuts, café, chocolate, batidos, tartas, miel, caramelos, fresas, leche | Molino, tostadora, colmenas, chocolatera, freidora… |
 | 🛒 **Supermercado** | 12: patatas fritas, galletas, refrescos, cereales, agua, zumo, yogures, arroz, huevos, leche, naranjas, patatas | Manantial, refinería de azúcar, galletera, embotelladora… |
 | 🚗 **Autos & Recambios** | 11: gasolina, aceite de motor, pintura, neumáticos, parabrisas, faros, baterías, llaves, tornillos, motores, **coches** | Pozo petrolero, minas, fundición, vidriería, ensambladora… |
+| ⚡ **Centro de Criaturas** | 10: brotines, llamines, burbujines, plumines, chispines, rocones, cápsulas, pociones, caramelos, bayas | Hábitats de criaturas elementales que **hay que alimentar**, mina de carbón, taller de cápsulas, laboratorio… |
 
 Cada tienda se desbloquea comprando la zona **«Nueva tienda»** al final de la anterior. Cada una tiene su propio dinero, mejoras y progreso.
 

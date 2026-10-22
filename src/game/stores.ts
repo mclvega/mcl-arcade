@@ -89,6 +89,16 @@ export const MACHINES: Record<string, MachineDef> = {
   aviary: { name: 'Pajarera', emoji: '🐦', style: 'habitat', color: 0x90caf9, input: 'seeds', output: 'bird', care: true },
   hamstery: { name: 'Hamstería', emoji: '🐹', style: 'habitat', color: 0xffcc80, input: 'seeds', output: 'hamster', care: true },
   aquarium: { name: 'Acuario', emoji: '🐠', style: 'aquarium', color: 0x6d4c41, input: 'algae', output: 'goldfish', care: true },
+  // Centro de Criaturas
+  capsulefactory: { name: 'Taller de cápsulas', emoji: '🔴', style: 'factory', color: 0xef5350, input: 'apricorn', output: 'capsule' },
+  potionlab: { name: 'Laboratorio', emoji: '🧪', style: 'factory', color: 0xce93d8, input: 'berry', output: 'potion' },
+  coalmine: { name: 'Mina de carbón', emoji: '⛏️', style: 'mine', color: 0x424242, output: 'coal' },
+  sproutgarden: { name: 'Jardín de Brotines', emoji: '🌱', style: 'habitat', color: 0x66bb6a, input: 'berry', output: 'sprout', care: true },
+  flamenest: { name: 'Volcán de Llamines', emoji: '🔥', style: 'habitat', color: 0xff7043, input: 'coal', output: 'flamey', care: true },
+  bubblepool: { name: 'Charca de Burbujines', emoji: '💧', style: 'habitat', color: 0x29b6f6, input: 'algae', output: 'bubbly', care: true },
+  skynest: { name: 'Nido de Plumines', emoji: '🪶', style: 'habitat', color: 0xa1887f, input: 'seeds', output: 'feathy', care: true },
+  sparkden: { name: 'Cueva de Chispines', emoji: '⚡', style: 'habitat', color: 0xfdd835, input: 'candy', output: 'sparky', care: true },
+  rockcave: { name: 'Gruta de Rocones', emoji: '🪨', style: 'habitat', color: 0x78909c, input: 'sand', output: 'rocky', care: true },
 };
 
 // ───────── Tiendas ─────────
@@ -235,6 +245,7 @@ export const STORES: StoreDef[] = [
     saleMult: 2.5,
     costMult: 4,
     startSteps: 3,
+    expansionPrice: 12000,
     theme: { sky: 0x8d9e6a, ground: 0x8d9e6a, farm: 0xb0b0b0, floorA: 0xcfd8dc, floorB: 0xb0bec5, wall: 0x90a4ae, sign: 0xff6f00, shelf: 0x546e7a, shelfBack: 0x37474f, trees: 'round', accent: '#ff6f00' },
     steps: [
       'machine:oilwell', 'machine:fuelrefinery', 'shelf:gasoline', 'cashier', 'machine:lubricants', 'shelf:motoroil',
@@ -243,6 +254,25 @@ export const STORES: StoreDef[] = [
       'stocker', 'machine:quarry', 'machine:glassworks', 'machine:windshieldfactory', 'shelf:windshield',
       'machine:headlightfactory', 'shelf:headlights', 'machine:lithiummine', 'machine:batteryfactory',
       'shelf:battery', 'stocker', 'machine:enginefactory', 'shelf:engine', 'machine:assembly', 'shelf:car',
+      'expansion:criaturas',
+    ],
+  },
+  {
+    id: 'criaturas',
+    name: 'Centro de Criaturas',
+    emoji: '⚡',
+    tagline: 'Cría criaturas elementales y fabrica cápsulas y pociones.',
+    names: ['Criaturas McL', 'Centro Elemental', 'El Nido Mágico', 'Cápsula Feliz', 'Bosque de Criaturas'],
+    saleMult: 3,
+    costMult: 5,
+    startSteps: 3,
+    theme: { sky: 0x9ccc65, ground: 0x9ccc65, farm: 0xaed581, floorA: 0xfffde7, floorB: 0xffcdd2, wall: 0xffffff, sign: 0xe53935, shelf: 0x42a5f5, shelfBack: 0x1e88e5, trees: 'round', accent: '#e53935' },
+    steps: [
+      'field:berry', 'machine:sproutgarden', 'shelf:sprout', 'cashier', 'shelf:berry', 'field:apricorn',
+      'machine:capsulefactory', 'shelf:capsule', 'stocker', 'machine:coalmine', 'machine:flamenest', 'shelf:flamey',
+      'machine:potionlab', 'shelf:potion', 'machine:algaepond', 'machine:bubblepool', 'shelf:bubbly', 'stocker',
+      'field:seeds', 'machine:skynest', 'shelf:feathy', 'field:sugarcane', 'machine:candyfactory', 'machine:sparkden',
+      'shelf:sparky', 'shelf:candy', 'machine:quarry', 'machine:rockcave', 'shelf:rocky', 'stocker',
     ],
   },
 ];

@@ -9,7 +9,10 @@ type ShapeKind =
   | 'loaf' | 'croissant' | 'donut' | 'jar' | 'cup' | 'can' | 'pie' | 'cake' | 'popcorn' | 'candy' | 'cookie'
   | 'pizzabox' | 'calzone' | 'leaf' | 'mushroom' | 'pepper' | 'layered' | 'tyre' | 'canister' | 'battery'
   | 'pane' | 'headlight' | 'wrench' | 'bolts' | 'engine' | 'car' | 'barrel' | 'rock' | 'crystal' | 'ingot'
-  | 'bucket' | 'cash' | 'fish' | 'bed' | 'dog' | 'cat' | 'bunny' | 'bird' | 'hamster' | 'fishbag';
+  | 'bucket' | 'cash' | 'fish' | 'bed' | 'dog' | 'cat' | 'bunny' | 'bird' | 'hamster' | 'fishbag' | 'critter' | 'capsule';
+
+/** Rasgo de cada criatura elemental. */
+type CritterFeature = 'hoja' | 'llama' | 'aleta' | 'alas' | 'chispa' | 'roca';
 
 /** Descripción compacta de la malla low-poly de un producto. */
 export interface Shape {
@@ -21,6 +24,8 @@ export interface Shape {
   w?: number;
   h?: number;
   d?: number;
+  /** Solo criaturas: su rasgo elemental. */
+  f?: CritterFeature;
 }
 
 export interface ProductDef {
@@ -126,6 +131,19 @@ export const PRODUCTS: Record<string, ProductDef> = {
   bird: { name: 'pájaros', emoji: '🐦', price: 8, shape: { k: 'bird', c: 0x42a5f5, c2: 0xffeb3b } },
   hamster: { name: 'hámsteres', emoji: '🐹', price: 9, shape: { k: 'hamster', c: 0xffb74d, c2: 0xfff3e0 } },
   goldfish: { name: 'peces de colores', emoji: '🐠', price: 10, shape: { k: 'fishbag', c: 0xff7043 } },
+
+  // ── Centro de Criaturas
+  berry: { name: 'bayas', emoji: '🫐', price: 4, shape: { k: 'cluster', c: 0x3949ab }, grow: 'bush', plant: 0x2e7d32 },
+  apricorn: { name: 'bellotas', emoji: '🌰', price: 0, shape: { k: 'ball', c: 0x8d6e63, r: 0.12, c2: 0x43a047 }, grow: 'tree' },
+  coal: { name: 'carbón', emoji: '⚫', price: 0, shape: { k: 'rock', c: 0x263238, c2: 0x37474f } },
+  capsule: { name: 'cápsulas', emoji: '🔴', price: 9, shape: { k: 'capsule', c: 0xe53935, c2: 0xfafafa } },
+  potion: { name: 'pociones', emoji: '🧪', price: 12, shape: { k: 'bottle', c: 0xab47bc, c2: 0xffffff } },
+  sprout: { name: 'brotines', emoji: '🌱', price: 14, shape: { k: 'critter', c: 0x81c784, c2: 0xf1f8e9, f: 'hoja' } },
+  flamey: { name: 'llamines', emoji: '🔥', price: 17, shape: { k: 'critter', c: 0xff8a65, c2: 0xffe0b2, f: 'llama' } },
+  bubbly: { name: 'burbujines', emoji: '💧', price: 17, shape: { k: 'critter', c: 0x4fc3f7, c2: 0xe1f5fe, f: 'aleta' } },
+  feathy: { name: 'plumines', emoji: '🪶', price: 18, shape: { k: 'critter', c: 0xbcaaa4, c2: 0xfff8e1, f: 'alas' } },
+  sparky: { name: 'chispines', emoji: '⚡', price: 22, shape: { k: 'critter', c: 0xffd54f, c2: 0xfff8e1, f: 'chispa' } },
+  rocky: { name: 'rocones', emoji: '🪨', price: 24, shape: { k: 'critter', c: 0x9e9e9e, c2: 0xd7ccc8, f: 'roca' } },
 
   cash: { name: 'dinero', emoji: '💵', price: 0, shape: { k: 'cash' } },
 };
@@ -402,6 +420,52 @@ function buildShape(s: Shape): THREE.Group {
       add(new THREE.ConeGeometry(0.035, 0.05, 4), c, -0.06, 0.13, 0, 0, 0, PI / 2);
       break;
     }
+    case 'capsule':
+      // Mitad de color arriba, blanca abajo, franja negra y botón.
+      add(new THREE.SphereGeometry(0.13, 14, 7, 0, PI * 2, 0, PI / 2), c, 0, 0.13);
+      add(new THREE.SphereGeometry(0.13, 14, 7, 0, PI * 2, PI / 2, PI / 2), c2, 0, 0.13);
+      add(cyl(0.133, 0.133, 0.025, 14), 0x212121, 0, 0.13);
+      add(cyl(0.035, 0.035, 0.03, 10), 0xffffff, 0.13, 0.13, 0, 0, 0, PI / 2);
+      break;
+    case 'critter':
+      // Criatura elemental: cuerpo redondo, barriga, ojos grandes y un rasgo según su tipo.
+      add(sphere(0.11), c, 0, 0.13).scale.set(1, 0.95, 1);
+      add(sphere(0.07), c2, 0.06, 0.11).scale.set(0.6, 1, 1);
+      for (const z of [-0.04, 0.04]) {
+        add(sphere(0.022), 0x212121, 0.1, 0.17, z);
+        add(sphere(0.008), 0xffffff, 0.118, 0.178, z);
+        add(sphere(0.035), c, 0.02, 0.025, z * 1.4).scale.set(1.3, 0.6, 1);
+      }
+      switch (s.f) {
+        case 'hoja':
+          add(cyl(0.008, 0.008, 0.07, 5), 0x558b2f, 0, 0.26);
+          for (const z of [-1, 1]) add(sphere(0.045), 0x43a047, 0, 0.3, z * 0.04, z * 0.6).scale.set(0.4, 0.5, 1.2);
+          break;
+        case 'llama':
+          add(new THREE.ConeGeometry(0.05, 0.14, 7), 0xff5722, -0.13, 0.2, 0, 0, 0, 0.6);
+          add(new THREE.ConeGeometry(0.028, 0.08, 6), 0xffeb3b, -0.12, 0.19, 0, 0, 0, 0.6);
+          break;
+        case 'aleta':
+          add(new THREE.ConeGeometry(0.04, 0.1, 4), c2, -0.01, 0.26, 0, 0, 0, 0.3).scale.set(1, 1, 0.3);
+          add(new THREE.ConeGeometry(0.05, 0.08, 4), c, -0.13, 0.09, 0, 0, 0, 1.2).scale.set(1, 1, 0.3);
+          break;
+        case 'alas':
+          for (const z of [-1, 1]) add(sphere(0.07), c2, -0.02, 0.15, z * 0.1, z * 0.5).scale.set(1, 0.4, 0.3);
+          add(new THREE.ConeGeometry(0.02, 0.05, 6), 0xffa000, 0.13, 0.13, 0, 0, 0, -PI / 2);
+          break;
+        case 'chispa':
+          for (const z of [-1, 1]) {
+            add(new THREE.ConeGeometry(0.025, 0.13, 6), c, 0, 0.28, z * 0.05, z * 0.35);
+            add(new THREE.ConeGeometry(0.012, 0.04, 6), 0x212121, 0, 0.335, z * 0.07, z * 0.35);
+          }
+          add(box(0.03, 0.09, 0.015), c, -0.13, 0.15, 0, 0, 0, 0.6);
+          add(box(0.03, 0.07, 0.015), c, -0.16, 0.22, 0, 0, 0, -0.6);
+          break;
+        case 'roca':
+          for (const [x, y, z] of [[-0.06, 0.22, 0], [-0.1, 0.16, 0.06], [-0.1, 0.16, -0.06], [0, 0.24, 0.04]]) add(new THREE.DodecahedronGeometry(0.035), c2, x, y, z);
+          break;
+      }
+      break;
     case 'cash':
       add(box(0.44, 0.06, 0.24), 0x43a047, 0, 0.03);
       add(box(0.1, 0.064, 0.244), 0xc8e6c9, 0, 0.03);
