@@ -1,3 +1,4 @@
+import { offlineBlock } from './offline';
 import { unlockAllStores } from './save';
 import { settings, updateSettings, type Settings } from './settings';
 import { openModal } from './ui';
@@ -104,7 +105,13 @@ function render(el: HTMLElement) {
 export function openSettings(closed?: () => void) {
   const el = document.createElement('div');
   el.className = 'settings';
-  render(el);
+  // El bloque «Jugar sin conexión» se crea una vez y se vuelve a poner tras cada repintado.
+  const offline = offlineBlock();
+  const paint = () => {
+    render(el);
+    el.append(offline);
+  };
+  paint();
   el.addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-choice]');
     if (!btn) return;
@@ -112,14 +119,14 @@ export function openSettings(closed?: () => void) {
     const raw = btn.dataset.value!;
     const value = key === 'fpsLimit' ? (Number(raw) as Settings['fpsLimit']) : raw;
     updateSettings({ [key]: value } as Partial<Settings>);
-    render(el);
+    paint();
   });
   el.addEventListener('change', (e) => {
     const input = e.target as HTMLInputElement;
     const key = input.dataset.key as Toggle | undefined;
     if (!key) return;
     updateSettings({ [key]: input.checked });
-    if (key === 'music') render(el);
+    if (key === 'music') paint();
   });
   el.addEventListener('submit', (e) => {
     e.preventDefault();
