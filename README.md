@@ -98,6 +98,7 @@ Requiere Node 20.19+ (recomendado 22).
 npm install
 npm run dev        # http://localhost:5173
 npm run build      # compila a dist/
+npm test           # tests de la lógica (tiendas, mejoras, pilas, guardado…)
 npm run preview    # sirve dist/ en http://localhost:4173
 ```
 
